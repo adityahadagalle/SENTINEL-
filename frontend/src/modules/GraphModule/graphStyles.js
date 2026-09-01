@@ -1,17 +1,17 @@
-/**
+﻿/**
  * SENTINEL Enterprise Cytoscape.js Styling
  * 
  * Distinct node geometries and colors:
- * - Victim Account: blue concentric double circle
- * - Mule Accounts: red/orange octagon
- * - Merchants: amber rounded rectangle
- * - UPI IDs: teal diamond
- * - Individuals: slate circle with initials
+ * - Victim Account: Blue ellipse with shield border
+ * - Mule Accounts: Red/Orange octagon with alert ring
+ * - Merchants: Amber rounded rectangle
+ * - UPI IDs: Violet diamond
+ * - Cashout: Gold octagon
  * 
- * Interactive states:
- * - .highlighted: bright accent, high z-index
- * - .dimmed: faded 0.15 opacity
- * - .suspicious-path: animated red edge flow
+ * Edge formatting:
+ * - Suspicious flow: Red dashed line with high-contrast label pill
+ * - Standard flow: Slate solid line
+ * - Tracing active: Electric blue pulse
  */
 
 export const STATUS_STYLES = {
@@ -29,16 +29,18 @@ const getNodeType = (node) => {
 
   if (combined.includes('VICTIM')) return 'victim';
   if (combined.includes('MULE')) return 'mule';
-  if (combined.includes('MERCH')) return 'merchant';
+  if (combined.includes('MERCH') || combined.includes('STORE')) return 'merchant';
   if (combined.includes('@') || combined.includes('UPI')) return 'upi';
+  if (combined.includes('CASH') || combined.includes('ATM')) return 'cashout';
   return 'individual';
 };
 
 const NODE_COLORS = {
   victim:     { bg: '#1E3A8A', border: '#3B82F6', borderWidth: 3 },
   mule:       { bg: '#7F1D1D', border: '#EF4444', borderWidth: 3 },
-  merchant:   { bg: '#78350F', border: '#F59E0B', borderWidth: 2 },
-  upi:        { bg: '#134E4A', border: '#14B8A6', borderWidth: 2 },
+  merchant:   { bg: '#064E3B', border: '#10B981', borderWidth: 2.5 },
+  upi:        { bg: '#4C1D95', border: '#8B5CF6', borderWidth: 2.5 },
+  cashout:    { bg: '#78350F', border: '#F59E0B', borderWidth: 2.5 },
   individual: { bg: '#1E293B', border: '#475569', borderWidth: 2 }
 };
 
@@ -47,6 +49,7 @@ const NODE_SHAPES = {
   mule:       'polygon',
   merchant:   'round-rectangle',
   upi:        'diamond',
+  cashout:    'polygon',
   individual: 'ellipse'
 };
 
@@ -63,17 +66,18 @@ const getNodeLabel = (node) => {
     return icon ? `${initials} ${icon}` : initials || label.slice(0, 3);
   }
 
-  const shortLabel = label.length > 15 ? `${label.slice(0, 4)}..${label.slice(-4)}` : label;
+  const shortLabel = label.length > 18 ? `${label.slice(0, 6)}..${label.slice(-4)}` : label;
   return icon ? `${shortLabel} ${icon}` : shortLabel;
 };
 
 const getNodeSize = (type) => {
   switch (type) {
-    case 'victim': return 64;
-    case 'mule': return 58;
-    case 'merchant': return 54;
-    case 'upi': return 50;
-    default: return 44;
+    case 'victim': return 66;
+    case 'mule': return 62;
+    case 'merchant': return 56;
+    case 'upi': return 52;
+    case 'cashout': return 56;
+    default: return 48;
   }
 };
 
@@ -84,7 +88,7 @@ export const graphStyles = [
     style: {
       'label': (node) => getNodeLabel(node),
       'shape': (node) => NODE_SHAPES[getNodeType(node)] || 'ellipse',
-      'shape-polygon-points': (node) => getNodeType(node) === 'mule' ? OCTAGON_POINTS : undefined,
+      'shape-polygon-points': (node) => ['mule', 'cashout'].includes(getNodeType(node)) ? OCTAGON_POINTS : undefined,
       'background-color': (node) => {
         const status = node.data('status');
         if (status && STATUS_STYLES[status]) return STATUS_STYLES[status].bg;
@@ -106,10 +110,10 @@ export const graphStyles = [
       'width': (node) => getNodeSize(getNodeType(node)),
       'height': (node) => getNodeSize(getNodeType(node)),
       'text-outline-width': 2,
-      'text-outline-color': '#0B1120',
-      'text-max-width': '80px',
+      'text-outline-color': '#080D18',
+      'text-max-width': '90px',
       'text-wrap': 'ellipsis',
-      'transition-property': 'background-color, border-color, width, height, opacity',
+      'transition-property': 'background-color, border-color, width, height, opacity, border-width',
       'transition-duration': '0.2s'
     }
   },
@@ -118,37 +122,39 @@ export const graphStyles = [
   {
     selector: 'edge',
     style: {
-      'label': '',
-      'width': 1.5,
+      'label': 'data(label)',
+      'width': 2,
       'line-color': '#283548',
-      'target-arrow-color': '#334155',
+      'target-arrow-color': '#475569',
       'target-arrow-shape': 'triangle',
       'curve-style': 'bezier',
-      'font-size': 9,
+      'font-size': 8.5,
       'font-family': 'JetBrains Mono, monospace',
+      'font-weight': 500,
       'text-rotation': 'autorotate',
-      'text-margin-y': -10,
-      'text-background-color': '#0D1424',
-      'text-background-opacity': 0.95,
+      'text-margin-y': -8,
+      'text-background-color': '#0C1220',
+      'text-background-opacity': 0.92,
       'text-background-padding': 3,
-      'text-border-color': '#1E293B',
+      'text-border-color': '#1A2640',
       'text-border-width': 1,
       'color': '#94A3B8',
-      'opacity': 0.5,
-      'arrow-scale': 0.8,
+      'opacity': 0.85,
+      'arrow-scale': 0.85,
       'transition-property': 'line-color, target-arrow-color, opacity, width',
-      'transition-duration': '0.15s'
+      'transition-duration': '0.2s'
     }
   },
 
   /* ─── Suspicious Edge ─── */
   {
-    selector: 'edge.suspicious-edge, edge.show-label',
+    selector: 'edge.suspicious-edge',
     style: {
-      'label': 'data(label)',
       'width': 2.5,
       'line-color': '#EF4444',
       'target-arrow-color': '#EF4444',
+      'line-style': 'dashed',
+      'line-dash-pattern': [6, 3],
       'opacity': 0.95,
       'z-index': 20,
       'color': '#FCA5A5',
@@ -158,11 +164,27 @@ export const graphStyles = [
     }
   },
 
+  /* ─── Sequentially Traced Flow Edge ─── */
+  {
+    selector: 'edge.traced-edge',
+    style: {
+      'width': 3.5,
+      'line-color': '#3B82F6',
+      'target-arrow-color': '#60A5FA',
+      'opacity': 1,
+      'z-index': 35,
+      'color': '#93C5FD',
+      'font-weight': 700,
+      'text-background-color': '#0B1A30',
+      'text-border-color': '#1D4ED8'
+    }
+  },
+
   /* ─── Selected / Neighborhood Highlighted ─── */
   {
     selector: 'node.highlighted, node:selected',
     style: {
-      'border-width': 3,
+      'border-width': 3.5,
       'border-color': '#3B82F6',
       'opacity': 1,
       'z-index': 30
@@ -171,16 +193,15 @@ export const graphStyles = [
   {
     selector: 'edge.highlighted',
     style: {
-      'width': 2.5,
+      'width': 3,
       'line-color': '#3B82F6',
       'target-arrow-color': '#3B82F6',
       'opacity': 1,
-      'z-index': 25,
-      'label': 'data(label)'
+      'z-index': 25
     }
   },
 
-  /* ─── Dimmed (when inspecting specific node) ─── */
+  /* ─── Dimmed State ─── */
   {
     selector: 'node.dimmed',
     style: {

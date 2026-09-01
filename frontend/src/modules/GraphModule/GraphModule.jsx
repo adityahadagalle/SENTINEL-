@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+﻿import { useMemo, useRef, useState, useCallback } from 'react';
 import GraphCanvas from './GraphCanvas';
 import Legend from './Legend';
 import RecoveryBar from './RecoveryBar';
@@ -79,12 +79,24 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
 
   const handleLogClick = useCallback((nodeId) => {
     if (canvasRef.current?.highlightNode) {
-      canvasRef.current.highlightNode(nodeId, 1500);
+      canvasRef.current.highlightNode(nodeId, 1800);
+    }
+  }, []);
+
+  const handleEvidenceClick = useCallback((hopIndex) => {
+    if (canvasRef.current?.highlightHop) {
+      canvasRef.current.highlightHop(hopIndex);
+    }
+  }, []);
+
+  const handleTimeChange = useCallback((newIndex) => {
+    setTimelineIndex(newIndex);
+    if (canvasRef.current?.highlightHop) {
+      canvasRef.current.highlightHop(newIndex);
     }
   }, []);
 
   const executeAction = useCallback((actionType, payload) => handleAction(actionType, payload), [handleAction]);
-  const isGraphEmpty = nodes.length === 0 || edges.length === 0;
 
   return (
     <div className="sentinel-shell">
@@ -94,16 +106,19 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
       {/* Main 3-Zone Layout */}
       <div className="dashboard-frame">
         {/* Graph Canvas (Left ~70%) */}
-        <div className="graph-pane">
-          <div className="graph-wrapper">
+        <div className="graph-pane flex flex-col h-full overflow-hidden bg-[#080D18]">
+          <div className="graph-wrapper relative flex-1 min-h-0">
             <Legend />
             {connectionStatus === 'OFFLINE' && (
               <div className="graph-state-message">Connection offline. Waiting for backend...</div>
             )}
-            {connectionStatus !== 'OFFLINE' && isGraphEmpty && (
-              <div className="graph-state-message">No graph data available for this case yet.</div>
-            )}
-            <GraphCanvas ref={canvasRef} nodes={nodes} edges={edges} onNodeClick={setSelectedNode} />
+            <GraphCanvas 
+              ref={canvasRef} 
+              nodes={nodes} 
+              edges={edges} 
+              caseId={caseData.case_id}
+              onNodeClick={setSelectedNode} 
+            />
             {selectedNode && (
               <NodeActions
                 node={selectedNode}
@@ -119,7 +134,7 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
           <TimelineScrubber
             edges={edges}
             currentIndex={timelineIndex}
-            onTimeChange={setTimelineIndex}
+            onTimeChange={handleTimeChange}
           />
         </div>
 
@@ -139,6 +154,7 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
             actionLog={actionLog}
             executeAction={executeAction}
             onLogClick={handleLogClick}
+            onEvidenceClick={handleEvidenceClick}
             connectionStatus={connectionStatus}
             role={role}
             recovery={recovery}
