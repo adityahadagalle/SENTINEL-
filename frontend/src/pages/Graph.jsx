@@ -8,10 +8,14 @@ const Graph = () => {
   const { caseId } = useParams();
   const { cases, actions, connectionStatus } = useWebSocket();
 
-  const selectedCase = useMemo(
-    () => cases.find((c) => c.case_id === caseId) || null,
-    [caseId, cases]
-  );
+  const selectedCase = useMemo(() => {
+    if (!cases || cases.length === 0) return null;
+    const cleanId = (caseId || '').replace(/^CASE-/, '');
+    return cases.find((c) => {
+      const cId = (c.case_id || '').replace(/^CASE-/, '');
+      return cId === cleanId || c.case_id === caseId;
+    }) || cases[0] || null;
+  }, [caseId, cases]);
 
   const handleAction = useCallback(async (type, payload) => {
     const endpointByType = {

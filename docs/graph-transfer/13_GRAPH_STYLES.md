@@ -1,3 +1,8 @@
+# SENTINEL Complete Cytoscape.js Stylesheet Code Reference
+
+## 1. Full Contents of `graphStyles.js`
+
+```javascript
 /**
  * SENTINEL Enterprise Cytoscape.js Visual Craft Styling
  *
@@ -223,7 +228,7 @@ export const graphStyles = [
       'target-arrow-shape':      'triangle',
       'arrow-scale':             0.8,
       
-      // Figma / tldraw Smooth Bezier Connectors
+      // Smooth Bezier Connectors
       'curve-style':             'bezier',
       'control-point-step-size': 40,
       'loop-direction':          '-45deg',
@@ -325,3 +330,4 @@ export const graphStyles = [
     style: { 'opacity': 0.08, 'shadow-opacity': 0 }
   }
 ];
+```

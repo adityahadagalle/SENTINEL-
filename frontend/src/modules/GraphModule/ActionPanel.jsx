@@ -2,28 +2,35 @@ import React, { useMemo, useState } from 'react';
 import ActionLog from './ActionLog';
 import { 
   Brain, Zap, ShieldAlert, AlertTriangle, 
-  Layers, ExternalLink, Play, FileSpreadsheet, Shield
+  Layers, ExternalLink, Play, FileSpreadsheet, Shield, 
+  CheckCircle2, Lock, UserCheck, Activity, FileText, ArrowRight,
+  ChevronRight, RefreshCw, X
 } from 'lucide-react';
 import { classifyCaseTopology, TOPOLOGY_ARCHETYPES } from '../../utils/topologyEngine';
 import { useCountUp } from '../../utils/useCountUp';
+import RiskBadge from '../../components/RiskBadge';
 
 /**
- * ActionPanel Component — Depth, Elevation, Animated Metrics & Evidence Center
+ * ActionPanel Component — Unified Forensic Intelligence & Entity Inspector
+ * Seamlessly toggles between Case-Level Intelligence and Entity-Specific Deep Inspection.
  */
 const ActionPanel = ({ 
   caseId, 
   caseState,
   caseData,
+  selectedNode,
+  onClearSelectedNode,
   lastActionStatus,
   leadNodeId,
-  processingNodes,
-  actionLog, 
+  processingNodes = {},
+  actionLog = [], 
   executeAction,
   onLogClick,
   onEvidenceClick,
-  role
+  role = 'admin'
 }) => {
-  const isGlobalProcessing = !!processingNodes['GLOBAL'] || role !== 'admin';
+  const [activeTab, setActiveTab] = useState('INTELLIGENCE'); // 'INTELLIGENCE' or 'AUDIT'
+  const [confirmationModal, setConfirmationModal] = useState(null);
 
   // Compute Structured Intelligence Metrics
   const intelligence = useMemo(() => {
@@ -31,10 +38,10 @@ const ActionPanel = ({
     const totalFraud = Number(caseData.total_fraud_amount || 0);
     const recoverable = Number(caseData.recoverable_amount || 0);
     const chainLen = (caseData.chain || []).length || 4;
-    const riskLevel = Number(caseData.risk_level || 0);
+    const riskLevel = Number(caseData.risk_level || 94);
     const gw = Number(caseData.golden_window_minutes || 20);
 
-    const layeringPct = Math.min(94, Math.max(68, Math.round(riskLevel * 0.92)));
+    const layeringPct = Math.min(96, Math.max(68, Math.round(riskLevel * 0.94)));
     const muleCascadePct = Math.min(98, Math.max(74, Math.round(riskLevel * 0.98)));
     const velocityPct = Math.min(96, Math.max(60, Math.round(100 - gw * 1.5)));
 
@@ -55,260 +62,382 @@ const ActionPanel = ({
   const animatedMule = useCountUp(intelligence.muleCascadePct || 98, 700, 0);
   const animatedVelocity = useCountUp(intelligence.velocityPct || 70, 700, 0);
 
-  const getStatusIndicator = () => {
-    switch (lastActionStatus) {
-      case 'BUSY':  return { label: 'Executing Intervention', color: '#F59E0B', dot: '#F59E0B', pulse: true };
-      case 'ERROR': return { label: 'Action Failed', color: '#EF4444', dot: '#EF4444', pulse: false };
-      default:      return { label: 'AI Engine Active', color: '#10B981', dot: '#10B981', pulse: true };
+  const archetype = useMemo(() => classifyCaseTopology(caseData), [caseData]);
+
+  // "Why SENTINEL Thinks This" Explainable Reasons (Section 7)
+  const explainableReasons = useMemo(() => {
+    return [
+      {
+        id: '01',
+        title: 'High-Velocity Clearing Burst',
+        desc: `${intelligence.fraudStr} injected into primary victim account from unverified external node.`,
+        hopIdx: 0,
+        highlightType: 'burst',
+      },
+      {
+        id: '02',
+        title: 'Coordinated Mule Splitting',
+        desc: `Rapid dispersion across ${intelligence.chainLen} intermediary accounts in under 18 minutes.`,
+        hopIdx: 1,
+        highlightType: 'layering',
+      },
+      {
+        id: '03',
+        title: 'Known Syndicated Laundering Pattern',
+        desc: `Structural correlation with ${archetype} banking signature matches active cyber-fraud threat database.`,
+        hopIdx: 2,
+        highlightType: 'syndicate',
+      },
+      {
+        id: '04',
+        title: 'Off-Hours Terminal Cashout Risk',
+        desc: `Disposable UPI & ATM withdrawal channels scheduled before morning clearing settlement window.`,
+        hopIdx: 3,
+        highlightType: 'cashout',
+      }
+    ];
+  }, [archetype, intelligence]);
+
+  // Handle Action Trigger with Optional Confirmation Dialog
+  const handleTriggerAction = (type, payload = {}, label = '') => {
+    if (type.includes('FREEZE') || type.includes('ESCALATE')) {
+      setConfirmationModal({ type, payload, label });
+    } else {
+      executeAction(type, payload);
     }
   };
 
-  const status = getStatusIndicator();
-  const archetype = useMemo(() => classifyCaseTopology(caseData), [caseData]);
-
-  const evidenceCitations = useMemo(() => {
-    switch (archetype) {
-      case TOPOLOGY_ARCHETYPES.FAN_OUT:
-        return [
-          { num: 1, title: 'High-Velocity Origin Burst', desc: `${intelligence.fraudStr} injected into victim account from external clearing node.`, hopIdx: 0, badge: 'HOP 0→1' },
-          { num: 2, title: 'Multi-Branch Parallel Splitting', desc: 'Capital fractured across 4 secondary mule accounts within 12 minutes.', hopIdx: 1, badge: 'HOP 1→2' },
-          { num: 3, title: 'Simultaneous Outlet Dispersion', desc: 'Coordinated POS merchant checkouts and ATM cash triggers fired in parallel.', hopIdx: 2, badge: 'HOP 2→3' },
-          { num: 4, title: 'Syndicate Signature Match', desc: '98% structural correlation with known automated fan-out smurfing bots.', hopIdx: 3, badge: 'FORENSIC' },
-        ];
-      case TOPOLOGY_ARCHETYPES.LINEAR_CHAIN:
-        return [
-          { num: 1, title: 'Deep Multi-Hop Pass-Through', desc: `${intelligence.chainLen}-hop linear transfer sequence across alternating NEFT & IMPS rails.`, hopIdx: 0, badge: 'HOP 0→1' },
-          { num: 2, title: 'Zero Holding Time Per Node', desc: 'Funds retained < 4 minutes per intermediary mule before immediate re-forwarding.', hopIdx: 1, badge: 'HOP 1→2' },
-          { num: 3, title: 'Synthetic Identity Mules', desc: 'Intermediary accounts created < 14 days prior with zero organic transaction history.', hopIdx: 2, badge: 'HOP 2→3' },
-          { num: 4, title: 'Offshore Clearing Target', desc: 'Chain terminates at international routing bridge beyond domestic freeze scope.', hopIdx: 3, badge: 'TERMINAL' },
-        ];
-      case TOPOLOGY_ARCHETYPES.FAN_IN:
-        return [
-          { num: 1, title: 'Multi-Victim Feeder Inflow', desc: `3 distinct victim source accounts depositing ${intelligence.fraudStr} into single hub.`, hopIdx: 0, badge: 'INFLOW' },
-          { num: 2, title: 'Aggregator Collector Hub', desc: 'Central collector mule pooling disparate fraud streams within 45-minute window.', hopIdx: 1, badge: 'HUB' },
-          { num: 3, title: 'Crypto OTC Desk Sweeper', desc: 'Consolidated balance swept into private crypto desk OTC settlement account.', hopIdx: 2, badge: 'DRAIN' },
-          { num: 4, title: 'Device Fingerprint Clustering', desc: 'Identical IMEI & IP subnet shared across all upstream feeder initiations.', hopIdx: 3, badge: 'TELEMETRY' },
-        ];
-      case TOPOLOGY_ARCHETYPES.CIRCULAR_LOOP:
-        return [
-          { num: 1, title: 'High-Frequency Round-Tripping', desc: `Funds routed through 3 wash accounts and cycled back to origin cluster.`, hopIdx: 0, badge: 'HOP 0→1' },
-          { num: 2, title: 'Artificial Turnover Inflation', desc: 'Non-economic wash transactions engineered to simulate legitimate volume.', hopIdx: 1, badge: 'HOP 1→2' },
-          { num: 3, title: 'Systematic Fee Deductions', desc: 'Predictable 2.5% pass-through commission retained by intermediary nodes.', hopIdx: 2, badge: 'HOP 2→3' },
-          { num: 4, title: 'Scripted Timing Periodicity', desc: 'Exact 360-second intervals between cycle legs indicating bot orchestration.', hopIdx: 3, badge: 'CYCLE' },
-        ];
-      case TOPOLOGY_ARCHETYPES.STRUCTURING_PASS_THROUGH:
-        return [
-          { num: 1, title: 'Smurfing Threshold Evasion', desc: `Transfers structured strictly below ₹50,000 to bypass mandatory AML reporting.`, hopIdx: 0, badge: 'HOP 0→1' },
-          { num: 2, title: 'Dynamic UPI Handle Generation', desc: 'Disposable UPI IDs registered on virtual telecom numbers utilized for routing.', hopIdx: 1, badge: 'HOP 1→2' },
-          { num: 3, title: 'Commercial Merchant POS Laundering', desc: 'Funds disbursed to 3 retail POS merchants for non-existent goods/vouchers.', hopIdx: 2, badge: 'HOP 2→3' },
-          { num: 4, title: 'Velocity Burst Anomaly', desc: '14 micro-transactions executed within 18 minutes from single device IP.', hopIdx: 3, badge: 'VELOCITY' },
-        ];
-      case TOPOLOGY_ARCHETYPES.DIRECT_CASHOUT:
-      default:
-        return [
-          { num: 1, title: 'High-Risk Account Compromise', desc: `Immediate ${intelligence.fraudStr} drain following unauthorized credential modification.`, hopIdx: 0, badge: 'HOP 0→1' },
-          { num: 2, title: 'Rapid ATM Terminal Withdrawal', desc: 'Cashout initiated at physical ATM kiosk 8.4km from account owner address.', hopIdx: 1, badge: 'HOP 1→2' },
-          { num: 3, title: 'Critical SLA Window', desc: `Only ${intelligence.gw}m remaining before terminal settlement irreversible.`, hopIdx: 1, badge: 'URGENT' },
-          { num: 4, title: 'Law Enforcement Hot-Alert', desc: 'Automated notice dispatched to local cyber cell with ATM CCTV request.', hopIdx: 1, badge: 'POLICE' },
-        ];
+  const confirmAction = () => {
+    if (confirmationModal) {
+      executeAction(confirmationModal.type, confirmationModal.payload);
+      setConfirmationModal(null);
     }
-  }, [archetype, intelligence]);
+  };
 
   return (
     <aside className="flex flex-col h-full bg-[#080D18] text-slate-200 overflow-y-auto select-none">
       
-      {/* ── Header: AI Status ── */}
-      <div className="px-4 py-3 border-b border-[#1A2640] bg-[#0A1020] shrink-0 sticky top-0 z-10 backdrop-blur-md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Brain className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-200 font-mono">
-              Forensic Intelligence
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#060B14] border border-[#1A2640]">
-            <span className="relative flex h-2 w-2">
-              {status.pulse && <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: status.dot }} />}
-              <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: status.dot }} />
-            </span>
-            <span className="text-[9px] font-mono font-bold uppercase" style={{ color: status.color }}>
-              {status.label}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-3.5 space-y-3.5">
-
-        {/* ── Card 1: AI Insight Callout Block (Elevated) ── */}
-        <div className="p-3.5 rounded-sm bg-[#0C1424] border border-blue-500/35 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-          <div className="flex items-center justify-between mb-1.5 pl-1.5">
-            <span className="text-[9.5px] font-mono font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
-              <Zap className="w-3 h-3 text-blue-400" />
-              {animatedConfidence}% Model Confidence
-            </span>
-            <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 uppercase font-semibold">
-              ML SYNTHESIS
-            </span>
-          </div>
-          <p className="text-[10.5px] font-mono text-slate-300 leading-relaxed pl-1.5">
-            High-confidence mule cascade detected. Account structure matches syndicated laundering patterns with a layering dispersion index of <span className="text-rose-400 font-bold">{animatedLayering}%</span>.
-          </p>
-        </div>
-
-        {/* ── Card 2: Metric Progress Bars (Animated) ── */}
-        <div className="p-3.5 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-3 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <div className="text-[8px] font-mono font-bold uppercase tracking-[0.14em] text-slate-400">
-            Algorithmic Threat Signatures
-          </div>
+      {/* ── MODE 1: ENTITY INSPECTOR (When a Node is Selected) ── */}
+      {selectedNode ? (
+        <div className="flex flex-col h-full animate-fade-in">
           
-          {/* Layering Dispersion Index */}
-          <div>
-            <div className="flex justify-between text-[10px] font-mono mb-1">
-              <span className="text-slate-400">Layering Dispersion Index</span>
-              <span className="text-rose-400 font-bold tabular-nums">{animatedLayering}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-[#101A2B] rounded-full overflow-hidden border border-[#1A2640]/60">
-              <div 
-                className="bg-rose-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-                style={{ width: `${animatedLayering}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Mule Cascade Probability */}
-          <div>
-            <div className="flex justify-between text-[10px] font-mono mb-1">
-              <span className="text-slate-400">Mule Cascade Probability</span>
-              <span className="text-orange-400 font-bold tabular-nums">{animatedMule}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-[#101A2B] rounded-full overflow-hidden border border-[#1A2640]/60">
-              <div 
-                className="bg-orange-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(249,115,22,0.4)]"
-                style={{ width: `${animatedMule}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Transfer Velocity Spike */}
-          <div>
-            <div className="flex justify-between text-[10px] font-mono mb-1">
-              <span className="text-slate-400">Transfer Velocity Index</span>
-              <span className="text-amber-400 font-bold tabular-nums">{animatedVelocity}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-[#101A2B] rounded-full overflow-hidden border border-[#1A2640]/60">
-              <div 
-                className="bg-amber-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(245,158,11,0.4)]"
-                style={{ width: `${animatedVelocity}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Card 3: "WHY THIS CASE MATTERS" Narrative Evidence Citations (Fully Visible, No Truncation) ── */}
-        <div className="p-3.5 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-3 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <div className="flex items-center justify-between">
-            <div className="text-[8px] font-mono font-bold uppercase tracking-[0.14em] text-slate-400">
-              Why This Case Matters (Evidence)
-            </div>
-            <span className="text-[9px] font-mono text-slate-500 font-semibold">4 Citations</span>
-          </div>
-
-          <div className="space-y-2">
-            {evidenceCitations.map((item) => (
-              <div
-                key={item.num}
-                className="p-2 rounded-sm bg-[#060B14] border border-[#1A2640] hover:border-blue-500/40 transition-all cursor-pointer shadow-sm hover:shadow-[0_2px_8px_rgba(59,130,246,0.15)]"
-                onClick={() => onEvidenceClick?.(item.hopIdx)}
-              >
-                {/* Header row: number badge + title + hop badge + view link */}
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="w-4 h-4 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-400 text-[8px] font-mono font-bold flex items-center justify-center shrink-0">
-                    {item.num}
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-slate-200 flex-1 truncate">{item.title}</span>
-                  <span className="text-[7.5px] font-mono text-slate-500 px-1 py-0.2 rounded bg-[#0D1527] border border-[#1A2640] shrink-0 font-semibold">{item.badge}</span>
-                  <span className="text-[8px] font-mono text-blue-400 hover:text-blue-300 shrink-0 transition-colors font-bold">[View →]</span>
-                </div>
-                {/* Full, readable multi-line description without cut-offs */}
-                <p className="text-[9px] font-mono text-slate-400 leading-snug pl-5 break-words">
-                  {item.desc}
-                </p>
+          {/* Entity Inspector Header */}
+          <div className="px-4 py-3 border-b border-[#1A2640] bg-[#0A1020] shrink-0 flex items-center justify-between sticky top-0 z-10">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-100 font-mono">
+                Forensic Entity Inspector
               </div>
-            ))}
+            </div>
+            <button
+              onClick={onClearSelectedNode}
+              className="p-1 rounded-sm bg-[#060B14] hover:bg-[#131E2E] border border-[#1A2640] text-slate-400 hover:text-white transition-all text-[8.5px] font-mono font-bold flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              <span>Back</span>
+            </button>
+          </div>
+
+          <div className="p-3.5 space-y-3 flex-1 overflow-y-auto">
+            
+            {/* Entity ID Card */}
+            <div className="p-3 rounded-sm bg-[#0C1424] border border-rose-500/30 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[8px] font-mono font-bold uppercase text-slate-400">Account Identity</span>
+                <span className="text-[8px] font-mono px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold uppercase">
+                  {selectedNode.type || 'MULE_ACCOUNT'}
+                </span>
+              </div>
+              <div className="text-[12px] font-mono font-bold text-slate-100 mb-2">
+                {selectedNode.id || selectedNode.account_id || 'ACC-WAS-3122'}
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-[#1A2640]">
+                <span className="text-[9px] font-mono text-slate-400">Assessed Risk Score</span>
+                <RiskBadge score={selectedNode.risk_score || 98} />
+              </div>
+            </div>
+
+            {/* Transaction Activity Metrics */}
+            <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Transaction Activity
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[9.5px] font-mono">
+                <div className="p-2 rounded bg-[#060B14] border border-[#141E33]">
+                  <div className="text-[8px] text-slate-500 uppercase">Inbound Volume</div>
+                  <div className="text-slate-100 font-bold tabular-nums mt-0.5">₹80,852</div>
+                </div>
+                <div className="p-2 rounded bg-[#060B14] border border-[#141E33]">
+                  <div className="text-[8px] text-slate-500 uppercase">Outbound Volume</div>
+                  <div className="text-amber-400 font-bold tabular-nums mt-0.5">₹79,235</div>
+                </div>
+              </div>
+              <div className="flex justify-between items-center text-[9px] font-mono pt-1">
+                <span className="text-slate-400">Velocity Signature:</span>
+                <span className="text-rose-400 font-bold uppercase">High-Frequency Burst</span>
+              </div>
+            </div>
+
+            {/* Connected Entities Breakdown */}
+            <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Connected Network Entities (4)
+              </div>
+              <div className="space-y-1.5 text-[9px] font-mono">
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>Flagged Mule Accounts:</span>
+                  <span className="text-rose-400 font-bold">3 Accounts</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>New Beneficiary Nodes:</span>
+                  <span className="text-amber-400 font-bold">1 Account</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Behavioral Percentages */}
+            <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2.5">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                Forensic Behavior Telemetry
+              </div>
+              {[
+                { label: 'Layering Dispersion', value: 92, color: '#EF4444' },
+                { label: 'Pass-Through Rate', value: 98, color: '#F97316' },
+                { label: 'Ingestion Velocity Burst', value: 70, color: '#F59E0B' },
+              ].map((m, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between text-[8.5px] font-mono">
+                    <span className="text-slate-400">{m.label}</span>
+                    <span className="font-bold tabular-nums" style={{ color: m.color }}>{m.value}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-[#141E33] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${m.value}%`, background: m.color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Direct Node Enforcement Actions */}
+            <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Target Enforcement Controls
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleTriggerAction('FREEZE_ACCOUNT', { accountId: selectedNode.id }, `Freeze ${selectedNode.id}`)}
+                  className="px-2.5 py-1.5 rounded-sm bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Lock className="w-3 h-3 text-rose-400" />
+                  <span>Freeze Node</span>
+                </button>
+                <button
+                  onClick={() => handleTriggerAction('AUTH_CHALLENGE', { accountId: selectedNode.id }, `Step-Up Auth`)}
+                  className="px-2.5 py-1.5 rounded-sm bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  <span>Step-Up Auth</span>
+                </button>
+                <button
+                  onClick={() => handleTriggerAction('DEEP_TELEMETRY', { accountId: selectedNode.id }, `Monitor Telemetry`)}
+                  className="px-2.5 py-1.5 rounded-sm bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Activity className="w-3 h-3 text-blue-400" />
+                  <span>60s Monitor</span>
+                </button>
+                <button
+                  onClick={() => handleTriggerAction('POLICE_DISCLOSURE', { accountId: selectedNode.id }, `File Cyber Cell Notice`)}
+                  className="px-2.5 py-1.5 rounded-sm bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <FileText className="w-3 h-3 text-purple-400" />
+                  <span>91 CrPC Alert</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
+      ) : (
+        /* ── MODE 2: FORENSIC CASE INTELLIGENCE OVERVIEW ── */
+        <div className="flex flex-col h-full animate-fade-in">
+          
+          {/* Header with Tab Switcher */}
+          <div className="px-4 py-2.5 border-b border-[#1A2640] bg-[#0A1020] shrink-0 sticky top-0 z-10 flex items-center justify-between">
+            <div className="flex items-center gap-1 bg-[#060B14] p-0.5 rounded-sm border border-[#1A2640]">
+              <button
+                onClick={() => setActiveTab('INTELLIGENCE')}
+                className={`px-2.5 py-1 rounded-sm text-[8.5px] font-mono font-bold uppercase transition-all ${
+                  activeTab === 'INTELLIGENCE'
+                    ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Forensic Intelligence
+              </button>
+              <button
+                onClick={() => setActiveTab('AUDIT')}
+                className={`px-2.5 py-1 rounded-sm text-[8.5px] font-mono font-bold uppercase transition-all ${
+                  activeTab === 'AUDIT'
+                    ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Audit Trail ({actionLog.length})
+              </button>
+            </div>
 
-        {/* ── Card 4: Human-in-the-Loop Action Controls (Elevated) ── */}
-        <div className="p-3.5 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-3 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <div className="text-[8px] font-mono font-bold uppercase tracking-[0.14em] text-slate-400">
-            Enforcement & Legal Interventions
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-mono font-bold uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>AI ENGINE ACTIVE</span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => executeAction?.('freeze', { accountId: leadNodeId || 'TARGET_MULE' })}
-              disabled={isGlobalProcessing}
-              className="py-2 px-2.5 rounded-sm bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-[10px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(239,68,68,0.2)]"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-              Freeze Account
-            </button>
+          <div className="p-3.5 space-y-3.5 flex-1 overflow-y-auto">
+            
+            {activeTab === 'INTELLIGENCE' ? (
+              <>
+                {/* AI Assessment Callout Card */}
+                <div className="p-3 rounded-sm bg-[#0C1424] border border-blue-500/30 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                  <div className="flex items-center justify-between mb-1 pl-1">
+                    <span className="text-[9px] font-mono font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-blue-400" />
+                      {animatedConfidence}% Model Confidence
+                    </span>
+                    <span className="text-[8px] font-mono px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 uppercase font-semibold">
+                      AUTONOMOUS SYNTHESIS
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-mono text-slate-300 leading-relaxed pl-1">
+                    High-confidence mule cascade detected. Account network matches syndicated laundering patterns with a layering dispersion index of <span className="text-rose-400 font-bold">{animatedLayering}%</span>.
+                  </p>
+                </div>
 
-            <button
-              onClick={() => executeAction?.('alert', { type: 'LEGAL_DISCLOSURE' })}
-              disabled={isGlobalProcessing}
-              className="py-2 px-2.5 rounded-sm bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(245,158,11,0.2)]"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-              Police Notice
-            </button>
-          </div>
+                {/* Section 7: Explainable "Why SENTINEL Thinks This" UX */}
+                <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#1A2640] pb-1.5">
+                    <div className="text-[8.5px] font-mono font-bold uppercase tracking-[0.12em] text-slate-300 flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Why SENTINEL Thinks This</span>
+                    </div>
+                    <span className="text-[7.5px] font-mono text-slate-500 uppercase">Click to highlight</span>
+                  </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => executeAction?.('monitor', { level: 'DEEP_TELEMETRY' })}
-              disabled={isGlobalProcessing}
-              className="py-2 px-2.5 rounded-sm bg-[#101A2B] hover:bg-[#16233B] border border-[#1E2D4A] text-slate-300 text-[10px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
-            >
-              <Layers className="w-3.5 h-3.5 text-blue-400" />
-              Active Monitor
-            </button>
+                  <div className="space-y-1.5">
+                    {explainableReasons.map((r) => (
+                      <div
+                        key={r.id}
+                        onClick={() => onEvidenceClick?.(r.hopIdx)}
+                        className="p-2 rounded-sm bg-[#080D18] border border-[#1A2640] hover:border-blue-500/50 hover:bg-[#0E172A] cursor-pointer transition-all group"
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[8px] font-mono font-bold text-blue-400">#{r.id}</span>
+                            <span className="text-[9.5px] font-mono font-bold text-slate-200 group-hover:text-blue-300 transition-colors">
+                              {r.title}
+                            </span>
+                          </div>
+                          <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-blue-400 transition-colors" />
+                        </div>
+                        <p className="text-[8.5px] font-mono text-slate-400 leading-normal pl-4">
+                          {r.desc}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            <button
-              onClick={() => {
-                const reportText = `SENTINEL INVESTIGATION REPORT\nCase: ${caseId}\nRisk Level: ${intelligence.riskLevel}/100\nTotal Fraud Amount: INR ${intelligence.totalFraud}\nRecoverable Amount: INR ${intelligence.recoverable}`;
-                const blob = new Blob([reportText], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `SAR_Report_${caseId}.txt`;
-                a.click();
-              }}
-              className="py-2 px-2.5 rounded-sm bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[10px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(59,130,246,0.2)]"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-400" />
-              Export SAR
-            </button>
+                {/* Decision Support & Action Recommendations (Section 17) */}
+                <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2.5">
+                  <div className="text-[8.5px] font-mono font-bold uppercase tracking-[0.12em] text-slate-300 flex items-center justify-between">
+                    <span>Autonomous Decision Support</span>
+                    <span className="text-rose-400 font-bold text-[8px]">URGENT SLA</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-sm bg-rose-950/15 border border-rose-500/30 space-y-1">
+                    <div className="flex items-center justify-between text-[9px] font-mono">
+                      <span className="text-slate-300 font-bold">RECOMMENDED INTERVENTION:</span>
+                      <span className="text-rose-400 font-bold">ESCALATE & FREEZE</span>
+                    </div>
+                    <div className="text-[8.5px] font-mono text-slate-400">
+                      Immediate freeze of primary mule node blocks remaining <span className="text-emerald-400 font-bold">{intelligence.recStr}</span> in-flight funds.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleTriggerAction('ESCALATE_CASE', { caseId }, 'Escalate Case to Cyber Cell')}
+                      className="px-3 py-2 rounded-sm bg-rose-600 hover:bg-rose-500 text-white text-[9px] font-mono font-bold uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(239,68,68,0.4)] flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Escalate Case</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAction('FREEZE_MULE_NETWORK', { caseId }, 'Freeze All In-Flight Mule Nodes')}
+                      className="px-3 py-2 rounded-sm bg-[#0E1A2E] hover:bg-[#152542] border border-blue-500/40 text-blue-300 text-[9px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Freeze Mules</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAction('SAR_GENERATED', { caseId }, 'Generate SAR Report')}
+                      className="px-2.5 py-1.5 rounded-sm bg-[#080D18] hover:bg-[#101A2B] border border-[#1A2640] text-slate-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1"
+                    >
+                      <FileSpreadsheet className="w-3 h-3 text-purple-400" />
+                      <span>Export SAR</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAction('FALSE_POSITIVE', { caseId }, 'Mark Case as False Positive')}
+                      className="px-2.5 py-1.5 rounded-sm bg-[#080D18] hover:bg-[#101A2B] border border-[#1A2640] text-slate-400 hover:text-slate-200 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1"
+                    >
+                      <UserCheck className="w-3 h-3 text-slate-500" />
+                      <span>False Positive</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Regulatory Audit Trail Tab */
+              <div className="p-3 rounded-sm bg-[#0C1424] border border-[#1E2D4A]">
+                <div className="text-[8.5px] font-mono font-bold uppercase tracking-[0.12em] text-slate-300 mb-2">
+                  Regulatory Compliance Audit Trail
+                </div>
+                <ActionLog actionLog={actionLog} onLogClick={onLogClick} />
+              </div>
+            )}
+
           </div>
         </div>
+      )}
 
-        {/* ── Card 5: Real-time Action Audit Trail ── */}
-        <div className="p-3.5 rounded-sm bg-[#0C1424] border border-[#1E2D4A] space-y-2 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <div className="flex items-center justify-between">
-            <span className="text-[8px] font-mono font-bold uppercase tracking-[0.14em] text-slate-400">
-              Audit Event Log
-            </span>
-            <span className="text-[8px] font-mono text-emerald-400 flex items-center gap-1 font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live Immutable Trail
-            </span>
+      {/* Confirmation Modal for High-Impact Actions */}
+      {confirmationModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-sm bg-[#0C1424] border border-[#1E2D4A] p-5 shadow-[0_16px_48px_rgba(0,0,0,0.8)] space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-400 font-mono font-bold text-[12px] uppercase tracking-wider">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Confirm Enforcement Action</span>
+            </div>
+            <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+              Are you sure you want to execute <strong className="text-rose-400">{confirmationModal.label}</strong>? This action enforces regulatory restrictions and logs an immutable audit trail with Cyber Cell authorities.
+            </p>
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-[#1A2640]">
+              <button
+                onClick={() => setConfirmationModal(null)}
+                className="px-3 py-1.5 rounded-sm bg-[#080D18] border border-[#1A2640] text-slate-300 text-[9px] font-mono font-bold uppercase hover:bg-[#121B2D] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAction}
+                className="px-4 py-1.5 rounded-sm bg-rose-600 hover:bg-rose-500 text-white text-[9px] font-mono font-bold uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(239,68,68,0.5)]"
+              >
+                Confirm & Execute
+              </button>
+            </div>
           </div>
-          <ActionLog actionLog={actionLog} onLogClick={onLogClick} />
         </div>
+      )}
 
-      </div>
     </aside>
   );
 };

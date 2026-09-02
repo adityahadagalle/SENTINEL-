@@ -3,7 +3,6 @@ import GraphCanvas from './GraphCanvas';
 import Legend from './Legend';
 import RecoveryBar from './RecoveryBar';
 import ActionPanel from './ActionPanel';
-import NodeActions from './NodeActions';
 import TimelineScrubber from './TimelineScrubber';
 import CaseBanner from '../../components/CaseBanner';
 import './GraphModule.css';
@@ -13,33 +12,31 @@ import { Database, Wifi, Send, Sparkles } from 'lucide-react';
 
 /**
  * DataProvenanceFooter — Pinned footer strip below the timeline scrubber.
- * Shows data quality caveats and index coverage — signals system honesty.
+ * Displays data quality caveats and index coverage — signals system honesty.
  */
 const DataProvenanceFooter = ({ edges = [], nodes = [] }) => {
   const txCount = edges.length || 5;
-  const nodeCount = nodes.length || 6;
   return (
     <div className="flex items-center gap-4 px-4 py-1.5 bg-[#030609] border-t border-[#101A2B] shrink-0 select-none">
-      <div className="flex items-center gap-1.5 text-[8.5px] font-mono text-slate-600">
-        <Database className="w-2.5 h-2.5 text-slate-700" />
+      <div className="flex items-center gap-1.5 text-[8.5px] font-mono text-slate-500">
+        <Database className="w-2.5 h-2.5 text-slate-600" />
         <span>{(2847 + txCount * 12).toLocaleString('en-IN')} txns indexed</span>
       </div>
       <div className="w-px h-3 bg-[#1A2640]" />
-      <div className="flex items-center gap-1 text-[8.5px] font-mono text-slate-600">
-        <Wifi className="w-2.5 h-2.5 text-slate-700" />
+      <div className="flex items-center gap-1 text-[8.5px] font-mono text-slate-500">
+        <Wifi className="w-2.5 h-2.5 text-slate-600" />
         <span>14 institutions covered</span>
       </div>
       <div className="w-px h-3 bg-[#1A2640]" />
-      <span className="text-[8.5px] font-mono text-amber-900">⚠ Partial IFSC metadata</span>
+      <span className="text-[8.5px] font-mono text-amber-500/80">⚠ Live clearing session</span>
       <div className="w-px h-3 bg-[#1A2640]" />
-      <span className="text-[8.5px] font-mono text-slate-700">Last sync &lt;2s ago</span>
+      <span className="text-[8.5px] font-mono text-slate-600">Last sync &lt;1s ago</span>
     </div>
   );
 };
 
 /**
  * AskSentinelBar — Full-width pinned "Ask Sentinel" query bar at the very bottom of the workstation.
- * More visually prominent than the copy inside ActionPanel.
  */
 const AskSentinelBar = ({ caseData, intelligence = {} }) => {
   const [query, setQuery] = useState('');
@@ -69,27 +66,27 @@ const AskSentinelBar = ({ caseData, intelligence = {} }) => {
       setReply(replies[text] || `Forensic analysis for ${caseId}: Capital dispersion across ${chainLen} accounts within the golden window matches syndicated laundering patterns. Immediate restriction of primary mule node recommended.`);
       setLoading(false);
       setQuery('');
-    }, 480);
+    }, 400);
   };
 
   return (
-    <div className="border-t border-[#1A2640] bg-[#080D18] px-4 py-2 space-y-2 shrink-0">
+    <div className="border-t border-[#1A2640] bg-[#060B14] px-3.5 py-2 space-y-2 shrink-0">
       {reply && (
-        <div className="px-3 py-2 rounded-sm bg-[#060B14] border border-blue-500/20 text-[10px] font-mono text-slate-300 leading-relaxed">
+        <div className="px-3 py-2 rounded-sm bg-[#080D18] border border-blue-500/30 text-[9.5px] font-mono text-slate-300 leading-relaxed shadow-lg animate-fade-in">
           <span className="text-blue-400 font-bold flex items-center gap-1 mb-1">
-            <Sparkles className="w-3 h-3" /> Sentinel Copilot
+            <Sparkles className="w-3 h-3" /> Sentinel Autonomous Copilot
           </span>
           {reply}
         </div>
       )}
 
-      {/* Quick prompts — fully readable, flex-wrap, no mid-word truncation */}
+      {/* Quick prompts */}
       <div className="flex flex-wrap items-center gap-1.5">
         {QUICK_PROMPTS.map((p) => (
           <button
             key={p}
             onClick={() => handleSubmit(p)}
-            className="text-[9px] font-mono text-slate-400 hover:text-blue-300 px-2 py-1 rounded-sm bg-[#060B14] border border-[#1A2640] hover:border-blue-500/40 transition-all text-left"
+            className="text-[8.5px] font-mono text-slate-400 hover:text-blue-300 px-2 py-0.5 rounded-sm bg-[#080D18] border border-[#1A2640] hover:border-blue-500/40 transition-all text-left"
           >
             {p}
           </button>
@@ -98,23 +95,23 @@ const AskSentinelBar = ({ caseData, intelligence = {} }) => {
 
       {/* Input row */}
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(query); }} className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Sparkles className="w-3 h-3 text-blue-500" />
-          <span className="text-[9px] font-mono font-bold text-blue-500 uppercase tracking-wider">Ask Sentinel</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <Sparkles className="w-3 h-3 text-blue-400" />
+          <span className="text-[8px] font-mono font-bold text-blue-400 uppercase tracking-wider">Copilot</span>
         </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ask about this case pattern, node risk, or recovery pathway..."
-          className="flex-1 bg-[#040810] border border-[#1A2640] hover:border-[#243352] focus:border-blue-500/50 focus:outline-none rounded-sm px-3 py-1.5 text-[10px] font-mono text-slate-300 placeholder:text-slate-700 transition-all"
+          placeholder="Ask about case pattern, node risk, or recovery pathway..."
+          className="flex-1 bg-[#040810] border border-[#1A2640] hover:border-[#243352] focus:border-blue-500/50 focus:outline-none rounded-sm px-2.5 py-1 text-[9.5px] font-mono text-slate-200 placeholder:text-slate-600 transition-all"
         />
         <button
           type="submit"
           disabled={loading || !query.trim()}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-sm bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 text-[9px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-3 py-1 rounded-sm bg-blue-600/30 hover:bg-blue-600/40 border border-blue-500/40 text-blue-300 text-[8.5px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <Send className="w-3 h-3" />
+          <Send className="w-2.5 h-2.5" />
           <span>{loading ? '...' : 'Ask'}</span>
         </button>
       </form>
@@ -202,18 +199,26 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
   const executeAction = useCallback((t, p) => handleAction(t, p), [handleAction]);
 
   return (
-    <div className="sentinel-shell">
-      {/* Case Banner */}
-      <CaseBanner caseData={caseData} />
+    <div className="flex flex-col h-full bg-[#080D18] overflow-hidden select-none">
+      
+      {/* ── Case Intelligence Bar Header ── */}
+      <CaseBanner 
+        caseData={caseData} 
+        onTracePath={() => canvasRef.current?.traceSuspiciousPath()} 
+      />
 
-      {/* Main 3-Zone Layout (Cross-fades on case switch) */}
-      <div key={caseData.case_id} className="dashboard-frame animate-fade-in">
-        {/* ── Graph Canvas Pane (Left ~70%) ── */}
-        <div className="graph-pane flex flex-col h-full overflow-hidden bg-[#080D18]">
-          <div className="graph-wrapper relative flex-1 min-h-0">
+      {/* ── Main Unified Workstation Grid (Graph + Inspector) ── */}
+      <div key={caseData.case_id} className="flex-1 flex min-h-0 divide-x divide-[#1A2640] animate-fade-in">
+        
+        {/* Left Pane: Forensic Graph Canvas + Autonomous Stepper (~68% width) */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#080D18] overflow-hidden">
+          
+          <div className="flex-1 relative min-h-0">
             <Legend />
             {connectionStatus === 'OFFLINE' && (
-              <div className="graph-state-message">Connection offline. Waiting for backend...</div>
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm text-slate-300 font-mono text-[11px]">
+                Connection offline. Reconnecting to clearing network...
+              </div>
             )}
             <GraphCanvas
               ref={canvasRef}
@@ -223,39 +228,33 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
               onNodeClick={setSelectedNode}
               onHopTrace={(hopIdx) => setTimelineIndex(hopIdx)}
             />
-            {selectedNode && (
-              <NodeActions
-                node={selectedNode}
-                onClose={() => setSelectedNode(null)}
-                executeAction={executeAction}
-                processingNodes={processingNodes}
-                role={role}
-              />
-            )}
           </div>
 
-          {/* Timeline Scrubber */}
+          {/* Autonomous Investigation Pipeline Stepper */}
           <TimelineScrubber
             edges={edges}
             currentIndex={timelineIndex}
             onTimeChange={handleTimeChange}
           />
 
-          {/* Data Provenance Footer */}
+          {/* Data Provenance Footer Strip */}
           <DataProvenanceFooter edges={edges} nodes={nodes} />
         </div>
 
-        {/* ── Intelligence Panel (Right ~30%) ── */}
-        <div className="intelligence-pane flex flex-col">
-          {/* Recovery Stats */}
+        {/* Right Pane: Unified Forensic Intelligence & Entity Inspector (~32% width) */}
+        <div className="w-[360px] shrink-0 flex flex-col bg-[#080D18] min-h-0">
+          
+          {/* Recovery Telemetry Bar */}
           <RecoveryBar recovery={recovery} role={role} />
 
-          {/* Action & Intelligence Panel */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Dual-Mode Action & Forensic Panel */}
+          <div className="flex-1 overflow-y-auto min-h-0">
             <ActionPanel
               caseId={caseData.case_id}
               caseState={caseData.status}
               caseData={caseData}
+              selectedNode={selectedNode}
+              onClearSelectedNode={() => setSelectedNode(null)}
               lastActionStatus={lastActionStatus}
               leadNodeId={leadNodeId}
               processingNodes={processingNodes}
@@ -269,9 +268,10 @@ const GraphModule = ({ caseData, actions = [], onAction, connectionStatus }) => 
             />
           </div>
 
-          {/* Ask Sentinel — Pinned Bottom Bar (right panel) */}
+          {/* Ask Sentinel Autonomous Copilot Query Bar */}
           <AskSentinelBar caseData={caseData} intelligence={intelligence} />
         </div>
+
       </div>
     </div>
   );

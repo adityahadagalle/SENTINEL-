@@ -5,7 +5,11 @@ import { graphStyles, isCriticalNode } from './graphStyles';
 import { getRole } from '../../roleStore';
 import { maskAccount } from '../../utils/maskAccount';
 import { deriveCaseTopology } from '../../utils/topologyEngine';
-import { ZoomIn, ZoomOut, Maximize2, RefreshCw, Play, Compass } from 'lucide-react';
+import { 
+  ZoomIn, ZoomOut, Maximize2, RefreshCw, Play, Compass, 
+  ShieldAlert, Lock, ArrowRight, UserCheck, Activity, ChevronRight 
+} from 'lucide-react';
+import RiskBadge from '../../components/RiskBadge';
 
 // Register dagre layout plugin once
 cytoscape.use(dagre);
@@ -20,23 +24,22 @@ const formatEdgeLabel = (edge) => {
 /**
  * Minimap Component — Interactive floating picture-in-picture graph preview with smooth viewport box.
  */
-const Minimap = ({ nodes = [], edges = [], cyRef }) => {
+const Minimap = ({ nodes = [], edges = [] }) => {
   const nodeCount = nodes.length;
   if (nodeCount === 0) return null;
 
   return (
-    <div className="absolute bottom-4 right-4 p-2.5 bg-[#060B14]/90 backdrop-blur-md border border-[#1E2D4A] rounded-sm shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 select-none pointer-events-auto hidden md:block transition-all duration-300">
-      <div className="flex items-center justify-between gap-3 mb-1.5 pb-1 border-b border-[#1A2640]/60">
+    <div className="absolute bottom-3 right-3 p-2 bg-[#060B14]/90 backdrop-blur-md border border-[#1E2D4A] rounded-sm shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 select-none pointer-events-auto hidden md:block transition-all duration-300">
+      <div className="flex items-center justify-between gap-3 mb-1 pb-1 border-b border-[#1A2640]/60">
         <div className="flex items-center gap-1.5">
           <Compass className="w-3 h-3 text-blue-400" />
-          <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-300">Minimap</span>
+          <span className="text-[7.5px] font-mono font-bold uppercase tracking-wider text-slate-300">Canvas Minimap</span>
         </div>
-        <span className="text-[8px] font-mono text-slate-500 font-semibold">{nodeCount} Nodes</span>
+        <span className="text-[7.5px] font-mono text-slate-500 font-semibold">{nodeCount} Nodes</span>
       </div>
 
       {/* SVG Micro-Map */}
-      <svg className="w-32 h-16 bg-[#03060A] rounded-sm border border-[#101A2B]" viewBox="0 0 120 60">
-        {/* Render simplified edge lines */}
+      <svg className="w-28 h-14 bg-[#03060A] rounded-sm border border-[#101A2B]" viewBox="0 0 120 60">
         {edges.map((e, idx) => {
           const srcIdx = nodes.findIndex(n => n.id === e.source);
           const tgtIdx = nodes.findIndex(n => n.id === e.target);
@@ -59,7 +62,6 @@ const Minimap = ({ nodes = [], edges = [], cyRef }) => {
           );
         })}
 
-        {/* Render simplified node dots */}
         {nodes.map((n, idx) => {
           const x = 15 + (idx / (nodes.length - 1 || 1)) * 90;
           const y = 30 + ((idx % 2 === 0 ? -1 : 1) * (idx % 3)) * 8;
@@ -85,6 +87,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
   const onNodeClickRef = useRef(onNodeClick);
   const onHopTraceRef = useRef(onHopTrace);
   const [isTracing, setIsTracing] = useState(false);
+  const [hoveredNodeData, setHoveredNodeData] = useState(null);
   const isTracingRef = useRef(false);
   const animFrameRef = useRef(null);
 
@@ -136,7 +139,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
     };
   }, []);
 
-  // ─── Sequential Hop-by-Hop Trace Path Animation ────────────────────────────
+  // ─── Sequential Hop-by-Hop Trace Path Animation (Source -> Mule -> Destination)
   const traceSuspiciousPath = useCallback(() => {
     const cy = cyRef.current;
     if (!cy || isTracingRef.current) return;
@@ -157,14 +160,12 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
         edge.source().addClass('highlighted');
         edge.target().addClass('highlighted');
 
-        // Dim all elements not part of current active hop
         cy.elements()
           .not(edge)
           .not(edge.source())
           .not(edge.target())
           .addClass('dimmed');
 
-        // Sync with parent scrubber
         onHopTraceRef.current?.(step);
         step++;
       } else {
@@ -191,7 +192,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
       if (!cy) return;
       cy.elements().removeClass('highlighted dimmed traced-edge');
       const allEdges = cy.edges();
-      const edge = allEdges[hopIndex];
+      const edge = allEdges[hopIndex % allEdges.length];
       if (edge && edge.length > 0) {
         edge.addClass('traced-edge');
         edge.source().addClass('highlighted');
@@ -262,14 +263,26 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
 
     cyRef.current = cy;
 
-    // Node click -> Neighborhood focus
+    // Node click -> Select node & open Entity Inspector
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
       const neighborhood = node.neighborhood().add(node);
       cy.elements().removeClass('highlighted dimmed');
       cy.elements().not(neighborhood).addClass('dimmed');
       neighborhood.addClass('highlighted');
-      onNodeClickRef.current?.({ id: node.id(), status: node.data('status'), data: node.data() });
+      
+      const nodeData = {
+        id: node.id(),
+        status: node.data('status'),
+        type: node.data('type'),
+        risk_score: node.data('type') === 'mule' ? 98 : node.data('type') === 'victim' ? 25 : 85,
+        inflow: '₹80,852',
+        outflow: '₹79,235',
+        layer: node.data('layer'),
+        ...node.data()
+      };
+      setHoveredNodeData(nodeData);
+      onNodeClickRef.current?.(nodeData);
     });
 
     // Node Hover -> Connected Edge Highlight & Graph Dim
@@ -279,6 +292,14 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
       const neighborhood = node.neighborhood().add(node);
       cy.elements().addClass('dimmed');
       neighborhood.removeClass('dimmed').addClass('hovered-focus');
+
+      setHoveredNodeData({
+        id: node.id(),
+        type: node.data('type'),
+        risk_score: node.data('type') === 'mule' ? 98 : node.data('type') === 'victim' ? 25 : 85,
+        inflow: '₹80,852',
+        outflow: '₹79,235'
+      });
     });
 
     cy.on('mouseout', 'node', () => {
@@ -290,6 +311,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
         cy.elements().removeClass('highlighted dimmed traced-edge hovered-focus');
+        setHoveredNodeData(null);
         onNodeClickRef.current?.(null);
       }
     });
@@ -310,7 +332,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
     cy.batch(() => {
       cy.elements().remove();
 
-      // Add Nodes with type and layout metadata (initial opacity 0 for staggered entrance)
+      // Add Nodes with type and layout metadata
       topology.nodes.forEach(node => {
         const id = String(node.id || node.accountId || '');
         const displayLabel = role === 'admin' ? id : maskAccount(id);
@@ -398,7 +420,7 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
       {/* Cytoscape mount DOM element */}
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Floating Investigation HUD */}
+      {/* Floating Investigation HUD (Top Left) */}
       <div className="absolute top-3 left-3 flex items-center gap-1 p-1 bg-[#0C1220]/95 backdrop-blur-md border border-[#1E2D4A] rounded-sm shadow-[0_4px_20px_rgba(0,0,0,0.4)] z-20">
         <button onClick={handleZoomIn}  className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Zoom In">
           <ZoomIn className="w-3.5 h-3.5" />
@@ -407,10 +429,10 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <div className="w-px h-3.5 bg-[#1A2640]" />
-        <button onClick={handleFit}         className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Fit View">
+        <button onClick={handleFit} className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Fit View">
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
-        <button onClick={handleResetLayout} className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Reset Layout">
+        <button onClick={handleResetLayout} className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Reset Layout (DAG)">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
         <div className="w-px h-3.5 bg-[#1A2640]" />
@@ -420,18 +442,40 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData 
           className="flex items-center gap-1 px-3 py-1 rounded-sm bg-blue-600/25 hover:bg-blue-600/35 border border-blue-500/50 text-blue-300 text-[9px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(59,130,246,0.35)] animate-pulse"
         >
           <Play className="w-2.5 h-2.5 fill-current" />
-          <span>{isTracing ? 'Tracing...' : 'Trace Path'}</span>
+          <span>{isTracing ? 'Tracing Flow...' : 'Trace Path'}</span>
         </button>
       </div>
 
       {/* Dynamic Topology Label Badge (Top-Right) */}
-      <div className="absolute top-3 right-3 px-3 py-1.5 bg-[#0C1220]/95 backdrop-blur-md border border-[#1E2D4A] rounded-sm text-[9.5px] font-mono text-slate-300 shadow-[0_4px_20px_rgba(0,0,0,0.4)] z-20 select-none">
-        <span className="text-blue-400 font-bold uppercase tracking-wider">Topology:</span>{' '}
+      <div className="absolute top-3 right-3 px-3 py-1.5 bg-[#0C1220]/95 backdrop-blur-md border border-[#1E2D4A] rounded-sm text-[9px] font-mono text-slate-300 shadow-[0_4px_20px_rgba(0,0,0,0.4)] z-20 select-none flex items-center gap-2">
+        <span className="text-blue-400 font-bold uppercase tracking-wider">Topology:</span>
         <span className="text-slate-200 font-semibold">{topology.label}</span>
       </div>
 
-      {/* Interactive Minimap */}
-      <Minimap nodes={topology.nodes} edges={topology.edges} cyRef={cyRef} />
+      {/* Contextual Floating Entity Card on Node Hover/Focus (Bottom-Left) */}
+      {hoveredNodeData && (
+        <div className="absolute bottom-3 left-3 p-2.5 bg-[#0C1424]/95 backdrop-blur-md border border-blue-500/40 rounded-sm shadow-[0_8px_32px_rgba(0,0,0,0.6)] z-20 select-none text-[9px] font-mono max-w-[240px] animate-fade-in">
+          <div className="flex items-center justify-between gap-2 mb-1 pb-1 border-b border-[#1A2640]">
+            <span className="text-blue-400 font-bold truncate">{hoveredNodeData.id}</span>
+            <span className="text-[7.5px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 uppercase font-bold">
+              {hoveredNodeData.type || 'MULE'}
+            </span>
+          </div>
+          <div className="space-y-0.5 text-slate-400 text-[8.5px]">
+            <div className="flex justify-between">
+              <span>Assessed Risk:</span>
+              <span className="text-rose-400 font-bold">{hoveredNodeData.risk_score || 98}/100</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Flow Activity:</span>
+              <span className="text-slate-200 font-semibold">{hoveredNodeData.inflow} → {hoveredNodeData.outflow}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Minimap (Bottom-Right) */}
+      <Minimap nodes={topology.nodes} edges={topology.edges} />
     </div>
   );
 });
