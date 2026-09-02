@@ -1,7 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Shield, Activity, Briefcase, LayoutDashboard, ChevronLeft, ChevronRight, LogOut, Flame } from 'lucide-react';
 import AttackModeToggle from './AttackModeToggle';
+import Avatar from './Avatar';
 
 const Sidebar = ({ role, connectionStatus, casesCount = 0, onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -20,7 +21,7 @@ const Sidebar = ({ role, connectionStatus, casesCount = 0, onLogout }) => {
       className="h-screen bg-[#060C17] border-r border-[#1A2640] flex flex-col justify-between shrink-0 select-none z-30 transition-[width] duration-200 ease-out overflow-hidden"
     >
       <div>
-        <div style={{ height: 44 }} className="flex items-center justify-between border-b border-[#1A2640] px-3 shrink-0">
+        <div style={{ height: 48 }} className="flex items-center justify-between border-b border-[#1A2640] px-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shrink-0">
               <Shield className="w-3.5 h-3.5 text-blue-400" />
@@ -90,9 +91,7 @@ const Sidebar = ({ role, connectionStatus, casesCount = 0, onLogout }) => {
           )}
         </div>
         <div className={`flex items-center gap-2 px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
-          <div className={`w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold border shrink-0 ${role === 'admin' ? 'bg-blue-600/10 text-blue-400 border-blue-500/20' : 'bg-[#131E2E] text-slate-400 border-[#1A2640]'}`}>
-            {role === 'admin' ? 'AR' : 'VW'}
-          </div>
+          <Avatar name={role === 'admin' ? 'Analyst Raj' : 'Viewer Ops'} size="sm" />
           {!collapsed && (
             <>
               <div className="truncate flex-1 min-w-0">

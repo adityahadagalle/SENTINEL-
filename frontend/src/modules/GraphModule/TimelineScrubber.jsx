@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
+import { Play, Pause, SkipBack, SkipForward, Clock } from 'lucide-react';
 
 /**
  * TimelineScrubber — Bottom timeline component for the Investigation Workstation
- * Shows transaction events along a time axis with flagged markers
+ * Shows transaction events along a time axis with flagged markers and interactive scrub.
  */
 const TimelineScrubber = ({ edges = [], currentIndex = 0, onTimeChange }) => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -16,101 +16,104 @@ const TimelineScrubber = ({ edges = [], currentIndex = 0, onTimeChange }) => {
         time: e.time || e.timestamp || '',
         amount: Number(e.amount || 0),
         tx_id: e.tx_id || e.id || '',
-        flagged: Number(e.amount || 0) > 100000 || (e.label && e.label.includes('suspicious'))
+        channel: e.channel || 'UPI',
+        flagged: Number(e.amount || 0) > 100000 || e.is_suspicious || (e.label && e.label.includes('suspicious'))
       }))
-      .filter(t => t.time)
-      .sort((a, b) => new Date(a.time) - new Date(b.time));
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [edges]);
 
-  const total = timePoints.length || edges.length;
+  const total = Math.max(timePoints.length, 5);
   const current = Math.min(currentIndex + 1, total);
   const progressPct = total > 0 ? (current / total) * 100 : 0;
 
-  // Format time for display
-  const formatTick = (timeStr) => {
-    if (!timeStr) return '';
-    try {
-      const d = new Date(timeStr);
-      if (isNaN(d.getTime())) return timeStr.slice(0, 8);
-      return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-    } catch {
-      return timeStr.slice(0, 8);
-    }
-  };
-
-  // Generate evenly spaced ticks
-  const ticks = useMemo(() => {
-    if (timePoints.length < 2) return [];
-    const count = Math.min(timePoints.length, 8);
-    const step = Math.floor(timePoints.length / count);
-    return Array.from({ length: count }, (_, i) => {
-      const tp = timePoints[Math.min(i * step, timePoints.length - 1)];
-      return {
-        pct: ((i * step) / (timePoints.length - 1)) * 100,
-        label: formatTick(tp.time)
-      };
-    });
-  }, [timePoints]);
-
-  // Flagged event positions
-  const flags = useMemo(() => {
-    if (timePoints.length < 2) return [];
-    return timePoints
-      .filter(t => t.flagged)
-      .map(t => ({
-        pct: (timePoints.indexOf(t) / (timePoints.length - 1)) * 100
-      }));
-  }, [timePoints]);
+  // Auto-play interval
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      onTimeChange?.((prev) => {
+        const next = (prev + 1) % total;
+        return next;
+      });
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [isPlaying, total, onTimeChange]);
 
   const handlePlayPause = () => setIsPlaying(!isPlaying);
   const handleStepBack = () => onTimeChange?.(Math.max(0, currentIndex - 1));
   const handleStepForward = () => onTimeChange?.(Math.min(total - 1, currentIndex + 1));
 
   return (
-    <div className="timeline-scrubber">
+    <div className="flex items-center gap-4 px-4 py-2 bg-[#040810] border-t border-[#1A2640] shrink-0 select-none">
       {/* Controls */}
-      <div className="timeline-controls">
-        <button className="timeline-btn" onClick={handleStepBack} title="Previous">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={handleStepBack}
+          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
+          title="Previous Flow Step"
+        >
           <SkipBack className="w-3 h-3" />
         </button>
         <button
-          className={`timeline-btn ${isPlaying ? 'active' : ''}`}
           onClick={handlePlayPause}
-          title={isPlaying ? 'Pause' : 'Play'}
+          className={`p-1.5 rounded-sm transition-colors ${isPlaying ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'hover:bg-[#131E2E] text-slate-400 hover:text-slate-200'}`}
+          title={isPlaying ? 'Pause Sequence' : 'Auto Play Sequence'}
         >
-          {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+          {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
         </button>
-        <button className="timeline-btn" onClick={handleStepForward} title="Next">
+        <button
+          onClick={handleStepForward}
+          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
+          title="Next Flow Step"
+        >
           <SkipForward className="w-3 h-3" />
         </button>
       </div>
 
-      {/* Track */}
-      <div className="timeline-track">
-        {/* Progress */}
-        <div className="timeline-progress" style={{ width: `${progressPct}%` }} />
+      <div className="w-px h-4 bg-[#1A2640]" />
 
-        {/* Ticks */}
-        {ticks.map((tick, i) => (
-          <div key={i}>
-            <div className="timeline-tick" style={{ left: `${tick.pct}%` }} />
-            <div className="timeline-tick-label" style={{ left: `${tick.pct}%` }}>
-              {tick.label}
-            </div>
-          </div>
-        ))}
+      {/* Scrub Track */}
+      <div className="flex-1 relative flex items-center h-4 cursor-pointer" onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const clickPct = (e.clientX - rect.left) / rect.width;
+        const targetIdx = Math.min(total - 1, Math.max(0, Math.floor(clickPct * total)));
+        onTimeChange?.(targetIdx);
+      }}>
+        {/* Base Track */}
+        <div className="w-full h-1 bg-[#1A2640] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-500 transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
 
-        {/* Flagged Events */}
-        {flags.map((flag, i) => (
-          <div key={`f-${i}`} className="timeline-flag" style={{ left: `${flag.pct}%` }} />
-        ))}
+        {/* Step Ticks */}
+        {Array.from({ length: total }).map((_, i) => {
+          const pct = ((i + 0.5) / total) * 100;
+          const isActive = i <= currentIndex;
+          return (
+            <div
+              key={i}
+              className={`absolute -translate-x-1/2 w-2 h-2 rounded-full border transition-all ${
+                i === currentIndex
+                  ? 'bg-blue-400 border-blue-200 ring-2 ring-blue-500/40 scale-125'
+                  : isActive
+                  ? 'bg-blue-600 border-blue-400'
+                  : 'bg-[#0F1926] border-[#1A2640]'
+              }`}
+              style={{ left: `${pct}%` }}
+              title={`Hop ${i+1}`}
+            />
+          );
+        })}
       </div>
 
-      {/* Counter */}
-      <div className="timeline-counter">
-        <span className="text-slate-300">{current}</span>
-        <span className="text-slate-600"> / {total}</span>
-        <span className="text-slate-700 text-[8px] ml-1">TXN</span>
+      <div className="w-px h-4 bg-[#1A2640]" />
+
+      {/* Step Counter */}
+      <div className="flex items-center gap-1.5 font-mono text-[10px]">
+        <Clock className="w-3 h-3 text-slate-500" />
+        <span className="text-slate-200 font-bold">Step {current}</span>
+        <span className="text-slate-600">/ {total}</span>
       </div>
     </div>
   );

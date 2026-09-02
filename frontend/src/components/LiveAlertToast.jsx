@@ -57,7 +57,7 @@ const LiveAlertToast = () => {
   if (!activeAlert) return null;
 
   return (
-    <div className="fixed top-5 right-8 z-[100] pointer-events-none font-sans select-none animate-in fade-in slide-in-from-top-2 duration-200">
+    <div className="fixed bottom-6 right-6 z-[100] pointer-events-none font-sans select-none animate-in fade-in slide-in-from-bottom-2 duration-200">
       <div
         className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl backdrop-blur-md shadow-2xl border pointer-events-none transition-all ${
           activeAlert.isCritical

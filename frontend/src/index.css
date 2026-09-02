@@ -38,6 +38,13 @@
     --sentinel-amber:          #F59E0B;
     --sentinel-orange:         #F97316;
 
+    /* ─── Motion Tokens ─── */
+    --motion-instant:          80ms ease-out;
+    --motion-fast:             120ms ease-out;
+    --motion-base:             200ms ease-out;
+    --motion-slow:             350ms ease-out;
+    --motion-graph:            420ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
     /* ─── shadcn/ui system tokens ─── */
     --background: 222 47% 6%;
     --foreground: 210 40% 89%;

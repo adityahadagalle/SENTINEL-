@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../hooks/useWebSocket';
 import RiskBadge from '../components/RiskBadge';
@@ -8,50 +8,99 @@ import {
   ArrowRight, X, ExternalLink, Activity, Layers, DollarSign 
 } from 'lucide-react';
 
+import { classifyCaseTopology, TOPOLOGY_ARCHETYPES } from '../utils/topologyEngine';
+
 /**
- * Mini Topology SVG thumbnail generator based on case hops / chain length
+ * Mini Topology SVG thumbnail generator derived from case topology archetype
  */
-const MiniTopologySVG = ({ hops = 2, isCritical = false }) => {
+const MiniTopologySVG = ({ caseData = {}, hops = 2, isCritical = false }) => {
   const strokeColor = isCritical ? '#EF4444' : '#3B82F6';
   const nodeColor = isCritical ? '#F87171' : '#60A5FA';
+  const archetype = classifyCaseTopology(caseData);
 
-  if (hops >= 5) {
-    return (
-      <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none">
-        <line x1="4" y1="10" x2="13" y2="5" stroke={strokeColor} strokeWidth="1" strokeDasharray="1 1" />
-        <line x1="4" y1="10" x2="13" y2="15" stroke={strokeColor} strokeWidth="1" />
-        <line x1="13" y1="5" x2="24" y2="10" stroke={strokeColor} strokeWidth="1" />
-        <line x1="13" y1="15" x2="24" y2="10" stroke={strokeColor} strokeWidth="1" />
-        <line x1="24" y1="10" x2="36" y2="10" stroke={strokeColor} strokeWidth="1" />
-        <circle cx="4" cy="10" r="2.5" fill="#3B82F6" />
-        <circle cx="13" cy="5" r="2" fill={nodeColor} />
-        <circle cx="13" cy="15" r="2" fill={nodeColor} />
-        <circle cx="24" cy="10" r="2" fill={nodeColor} />
-        <circle cx="36" cy="10" r="2.5" fill="#10B981" />
-      </svg>
-    );
+  switch (archetype) {
+    case TOPOLOGY_ARCHETYPES.FAN_OUT:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Wide Fan-Out">
+          <line x1="4" y1="10" x2="20" y2="4" stroke={strokeColor} strokeWidth="1" />
+          <line x1="4" y1="10" x2="20" y2="10" stroke={strokeColor} strokeWidth="1" />
+          <line x1="4" y1="10" x2="20" y2="16" stroke={strokeColor} strokeWidth="1" />
+          <line x1="20" y1="4" x2="36" y2="4" stroke="#10B981" strokeWidth="1" />
+          <line x1="20" y1="10" x2="36" y2="10" stroke="#F59E0B" strokeWidth="1" />
+          <line x1="20" y1="16" x2="36" y2="16" stroke="#8B5CF6" strokeWidth="1" />
+          <circle cx="4" cy="10" r="2.5" fill="#3B82F6" />
+          <circle cx="20" cy="4" r="2" fill={nodeColor} />
+          <circle cx="20" cy="10" r="2" fill={nodeColor} />
+          <circle cx="20" cy="16" r="2" fill={nodeColor} />
+          <circle cx="36" cy="4" r="2" fill="#10B981" />
+          <circle cx="36" cy="10" r="2" fill="#F59E0B" />
+          <circle cx="36" cy="16" r="2" fill="#8B5CF6" />
+        </svg>
+      );
+    case TOPOLOGY_ARCHETYPES.FAN_IN:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Aggregator Fan-In">
+          <line x1="4" y1="4" x2="22" y2="10" stroke={strokeColor} strokeWidth="1" />
+          <line x1="4" y1="10" x2="22" y2="10" stroke={strokeColor} strokeWidth="1" />
+          <line x1="4" y1="16" x2="22" y2="10" stroke={strokeColor} strokeWidth="1" />
+          <line x1="22" y1="10" x2="36" y2="10" stroke="#06B6D4" strokeWidth="1.5" />
+          <circle cx="4" cy="4" r="2" fill="#3B82F6" />
+          <circle cx="4" cy="10" r="2" fill="#3B82F6" />
+          <circle cx="4" cy="16" r="2" fill="#3B82F6" />
+          <circle cx="22" cy="10" r="2.5" fill="#F97316" />
+          <circle cx="36" cy="10" r="2.5" fill="#06B6D4" />
+        </svg>
+      );
+    case TOPOLOGY_ARCHETYPES.CIRCULAR_LOOP:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Circular Loop">
+          <circle cx="20" cy="10" r="7" stroke={strokeColor} strokeWidth="1.2" strokeDasharray="3 1.5" />
+          <circle cx="4" cy="10" r="2" fill="#3B82F6" />
+          <circle cx="13" cy="10" r="2" fill={nodeColor} />
+          <circle cx="20" cy="3" r="2" fill={nodeColor} />
+          <circle cx="27" cy="10" r="2" fill={nodeColor} />
+          <circle cx="20" cy="17" r="2" fill={nodeColor} />
+        </svg>
+      );
+    case TOPOLOGY_ARCHETYPES.LINEAR_CHAIN:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Deep Linear Chain">
+          <line x1="4" y1="10" x2="36" y2="10" stroke={strokeColor} strokeWidth="1.2" />
+          <circle cx="4" cy="10" r="2" fill="#3B82F6" />
+          <circle cx="12" cy="10" r="2" fill={nodeColor} />
+          <circle cx="20" cy="10" r="2" fill={nodeColor} />
+          <circle cx="28" cy="10" r="2" fill={nodeColor} />
+          <circle cx="36" cy="10" r="2.5" fill="#F59E0B" />
+        </svg>
+      );
+    case TOPOLOGY_ARCHETYPES.STRUCTURING_PASS_THROUGH:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Structuring Pass-Through">
+          <line x1="4" y1="10" x2="14" y2="10" stroke={strokeColor} strokeWidth="1" />
+          <line x1="14" y1="10" x2="25" y2="6" stroke="#8B5CF6" strokeWidth="1" />
+          <line x1="14" y1="10" x2="25" y2="14" stroke="#8B5CF6" strokeWidth="1" />
+          <line x1="25" y1="6" x2="36" y2="6" stroke="#10B981" strokeWidth="1" />
+          <line x1="25" y1="14" x2="36" y2="14" stroke="#10B981" strokeWidth="1" />
+          <circle cx="4" cy="10" r="2" fill="#3B82F6" />
+          <circle cx="14" cy="10" r="2" fill={nodeColor} />
+          <circle cx="25" cy="6" r="2" fill="#8B5CF6" />
+          <circle cx="25" cy="14" r="2" fill="#8B5CF6" />
+          <circle cx="36" cy="6" r="2" fill="#10B981" />
+          <circle cx="36" cy="14" r="2" fill="#10B981" />
+        </svg>
+      );
+    case TOPOLOGY_ARCHETYPES.DIRECT_CASHOUT:
+    default:
+      return (
+        <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none" title="Direct Cashout">
+          <line x1="6" y1="10" x2="20" y2="10" stroke={strokeColor} strokeWidth="1.2" />
+          <line x1="20" y1="10" x2="34" y2="10" stroke="#F59E0B" strokeWidth="1.2" strokeDasharray="2 1" />
+          <circle cx="6" cy="10" r="2.5" fill="#3B82F6" />
+          <circle cx="20" cy="10" r="2.5" fill={nodeColor} />
+          <circle cx="34" cy="10" r="2.5" fill="#F59E0B" />
+        </svg>
+      );
   }
-  if (hops >= 3) {
-    return (
-      <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none">
-        <line x1="5" y1="10" x2="20" y2="5" stroke={strokeColor} strokeWidth="1" />
-        <line x1="5" y1="10" x2="20" y2="15" stroke={strokeColor} strokeWidth="1" strokeDasharray="1 1" />
-        <line x1="20" y1="5" x2="35" y2="10" stroke={strokeColor} strokeWidth="1" />
-        <line x1="20" y1="15" x2="35" y2="10" stroke={strokeColor} strokeWidth="1" />
-        <circle cx="5" cy="10" r="2.5" fill="#3B82F6" />
-        <circle cx="20" cy="5" r="2" fill={nodeColor} />
-        <circle cx="20" cy="15" r="2" fill={nodeColor} />
-        <circle cx="35" cy="10" r="2.5" fill="#10B981" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="w-10 h-5" viewBox="0 0 40 20" fill="none">
-      <line x1="8" y1="10" x2="32" y2="10" stroke={strokeColor} strokeWidth="1" strokeDasharray={isCritical ? "2 1" : "none"} />
-      <circle cx="8" cy="10" r="2.5" fill="#3B82F6" />
-      <circle cx="32" cy="10" r="2.5" fill={isCritical ? "#EF4444" : "#10B981"} />
-    </svg>
-  );
 };
 
 const Cases = () => {
@@ -229,7 +278,7 @@ const Cases = () => {
 
                     {/* Mini SVG Topology Preview */}
                     <td className="py-2">
-                      <MiniTopologySVG hops={c.hops} isCritical={isCritical} />
+                      <MiniTopologySVG caseData={c} hops={c.hops} isCritical={isCritical} />
                     </td>
 
                     {/* Status Badge */}

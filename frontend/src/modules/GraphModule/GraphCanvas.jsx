@@ -1,158 +1,197 @@
-﻿import React, { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback, useMemo } from 'react';
 import cytoscape from 'cytoscape';
-import { graphStyles } from './graphStyles';
+import dagre from 'cytoscape-dagre';
+import { graphStyles, isCriticalNode } from './graphStyles';
 import { getRole } from '../../roleStore';
 import { maskAccount } from '../../utils/maskAccount';
-import { ZoomIn, ZoomOut, Maximize2, RefreshCw, Flame, Play, Eye } from 'lucide-react';
+import { deriveCaseTopology } from '../../utils/topologyEngine';
+import { ZoomIn, ZoomOut, Maximize2, RefreshCw, Play, Compass } from 'lucide-react';
 
-const formatTransactionLabel = (edge) => {
+// Register dagre layout plugin once
+cytoscape.use(dagre);
+
+const formatEdgeLabel = (edge) => {
   const amount = Number(edge.amount || 0);
-  const time = edge.time || edge.timestamp || '';
   const channel = edge.channel || 'UPI';
-  const formattedAmount = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
-  return `₹${formattedAmount} · ${channel}`;
+  const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
+  return `₹${formatted} · ${channel}`;
 };
 
 /**
- * Procedurally enrich graph topology to ensure full multi-hop visualization (5-8 nodes)
+ * Minimap Component — Interactive floating picture-in-picture graph preview with smooth viewport box.
  */
-const buildMultiHopTopology = (rawNodes = [], rawEdges = [], caseId = '') => {
-  if (rawNodes.length >= 4 && rawEdges.length >= 3) {
-    return { nodes: rawNodes, edges: rawEdges };
-  }
+const Minimap = ({ nodes = [], edges = [], cyRef }) => {
+  const nodeCount = nodes.length;
+  if (nodeCount === 0) return null;
 
-  const hash = (caseId || 'CASE').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const victimId = rawNodes[0]?.id || `ACC-VICTIM-${1000 + (hash % 8999)}`;
-  const muleAId  = rawNodes[1]?.id || `ACC-MULE-A-${2000 + (hash % 8999)}`;
-  const muleBId  = `ACC-MULE-B-${3000 + (hash % 8999)}`;
-  const upiId    = `UPI-DRAIN-${4000 + (hash % 8999)}@oksbi`;
-  const merchId  = `ACC-MERCH-${5000 + (hash % 8999)}`;
-  const cashId   = `ATM-CASHOUT-${6000 + (hash % 8999)}`;
+  return (
+    <div className="absolute bottom-4 right-4 p-2.5 bg-[#060B14]/90 backdrop-blur-md border border-[#1E2D4A] rounded-sm shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 select-none pointer-events-auto hidden md:block transition-all duration-300">
+      <div className="flex items-center justify-between gap-3 mb-1.5 pb-1 border-b border-[#1A2640]/60">
+        <div className="flex items-center gap-1.5">
+          <Compass className="w-3 h-3 text-blue-400" />
+          <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-300">Minimap</span>
+        </div>
+        <span className="text-[8px] font-mono text-slate-500 font-semibold">{nodeCount} Nodes</span>
+      </div>
 
-  const enrichedNodes = [
-    { id: victimId, label: victimId, displayLabel: victimId, status: 'flagged', type: 'victim', layer: 0 },
-    { id: muleAId,  label: muleAId,  displayLabel: muleAId,  status: 'flagged', type: 'mule',   layer: 1 },
-    { id: muleBId,  label: muleBId,  displayLabel: muleBId,  status: 'flagged', type: 'mule',   layer: 1 },
-    { id: upiId,    label: upiId,    displayLabel: upiId,    status: 'active',  type: 'upi',    layer: 2 },
-    { id: merchId,  label: merchId,  displayLabel: merchId,  status: 'active',  type: 'merchant', layer: 3 },
-    { id: cashId,   label: cashId,   displayLabel: cashId,   status: 'withdrawn', type: 'cashout', layer: 3 }
-  ];
+      {/* SVG Micro-Map */}
+      <svg className="w-32 h-16 bg-[#03060A] rounded-sm border border-[#101A2B]" viewBox="0 0 120 60">
+        {/* Render simplified edge lines */}
+        {edges.map((e, idx) => {
+          const srcIdx = nodes.findIndex(n => n.id === e.source);
+          const tgtIdx = nodes.findIndex(n => n.id === e.target);
+          if (srcIdx === -1 || tgtIdx === -1) return null;
+          const x1 = 15 + (srcIdx / (nodes.length - 1 || 1)) * 90;
+          const y1 = 30 + ((srcIdx % 2 === 0 ? -1 : 1) * (srcIdx % 3)) * 8;
+          const x2 = 15 + (tgtIdx / (nodes.length - 1 || 1)) * 90;
+          const y2 = 30 + ((tgtIdx % 2 === 0 ? -1 : 1) * (tgtIdx % 3)) * 8;
+          return (
+            <line
+              key={`mm-e-${idx}`}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke={e.is_suspicious ? '#EF4444' : '#243352'}
+              strokeWidth={e.is_suspicious ? 1.5 : 1}
+              strokeOpacity={0.7}
+            />
+          );
+        })}
 
-  const enrichedEdges = [
-    { id: 'e1', source: victimId, target: muleAId, amount: 284000, channel: 'NEFT', time: '10:14:20', is_suspicious: true },
-    { id: 'e2', source: victimId, target: muleBId, amount: 146000, channel: 'IMPS', time: '10:14:35', is_suspicious: true },
-    { id: 'e3', source: muleAId,  target: upiId,   amount: 220000, channel: 'UPI',  time: '10:16:10', is_suspicious: true },
-    { id: 'e4', source: muleBId,  target: merchId, amount: 140000, channel: 'CARD', time: '10:18:45', is_suspicious: false },
-    { id: 'e5', source: upiId,    target: cashId,  amount: 215000, channel: 'IMPS', time: '10:22:00', is_suspicious: true }
-  ];
-
-  return { nodes: enrichedNodes, edges: enrichedEdges };
+        {/* Render simplified node dots */}
+        {nodes.map((n, idx) => {
+          const x = 15 + (idx / (nodes.length - 1 || 1)) * 90;
+          const y = 30 + ((idx % 2 === 0 ? -1 : 1) * (idx % 3)) * 8;
+          const color = n.type === 'victim' ? '#3B82F6' : n.type === 'mule' ? '#EF4444' : n.type === 'merchant' ? '#10B981' : n.type === 'upi' ? '#8B5CF6' : '#F59E0B';
+          return (
+            <circle
+              key={`mm-n-${n.id}`}
+              cx={x}
+              cy={y}
+              r={n.type === 'mule' ? 3.5 : 2.5}
+              fill={color}
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
 };
 
-const applyHierarchicalLayout = (cy, container, animate = false) => {
-  const width = container?.clientWidth || 800;
-  const height = container?.clientHeight || 500;
-  const padding = 50;
-  const usableWidth = width - padding * 2;
-  const usableHeight = height - padding * 2;
-
-  // Group nodes by type / depth column
-  const layers = {
-    0: [], // Victim
-    1: [], // Primary Mules
-    2: [], // Intermediaries / UPI
-    3: []  // Terminals / Merchants / Cashout
-  };
-
-  cy.nodes().forEach(node => {
-    const id = node.id().toUpperCase();
-    if (id.includes('VICTIM')) layers[0].push(node);
-    else if (id.includes('MULE')) layers[1].push(node);
-    else if (id.includes('UPI') || id.includes('@')) layers[2].push(node);
-    else layers[3].push(node);
-  });
-
-  const totalCols = 4;
-  Object.keys(layers).forEach((colIdxStr) => {
-    const colIdx = Number(colIdxStr);
-    const nodesInCol = layers[colIdx];
-    const x = padding + (usableWidth * colIdx) / (totalCols - 1);
-
-    nodesInCol.forEach((node, rowIdx) => {
-      const y = padding + (usableHeight * (rowIdx + 1)) / (nodesInCol.length + 1);
-      if (animate) {
-        node.stop().animate({ position: { x, y } }, { duration: 350 });
-      } else {
-        node.position({ x, y });
-      }
-    });
-  });
-};
-
-const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = '' }, ref) => {
+const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseData = {}, onHopTrace }, ref) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
-  const isInitializedRef = useRef(false);
   const onNodeClickRef = useRef(onNodeClick);
+  const onHopTraceRef = useRef(onHopTrace);
   const [isTracing, setIsTracing] = useState(false);
+  const isTracingRef = useRef(false);
+  const animFrameRef = useRef(null);
 
-  // Synthesize topology if sparse
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
+  useEffect(() => { onHopTraceRef.current = onHopTrace; }, [onHopTrace]);
+
+  // Derive genuine case-based topology with distinct nodes, edges, archetype, and dynamic label
   const topology = useMemo(() => {
-    return buildMultiHopTopology(nodes, edges, caseId);
-  }, [nodes, edges, caseId]);
+    return deriveCaseTopology(nodes, edges, caseData);
+  }, [nodes, edges, caseData]);
 
+  const riskScore = Number(caseData.risk_level || 85);
+  const ambientGlowColor = riskScore >= 85
+    ? 'rgba(239, 68, 68, 0.08)'
+    : riskScore >= 60
+    ? 'rgba(245, 158, 11, 0.07)'
+    : 'rgba(59, 130, 246, 0.06)';
+
+  // ─── Continuous Motion Loop: Dash-Flow + Critical Node Breathing Glow ──────
   useEffect(() => {
-    onNodeClickRef.current = onNodeClick;
-  }, [onNodeClick]);
+    let offset = 0;
+    const loop = () => {
+      const cy = cyRef.current;
+      if (cy) {
+        offset = (offset + 0.5) % 24;
+        // 1. Continuous money flow animation along dashed edges
+        cy.edges('.suspicious-edge').style('line-dash-offset', -offset);
 
-  // Sequential path trace animation
+        // 2. Slow breathing glow on critical nodes (~2s cycle)
+        const time = performance.now() * 0.003;
+        const pulseBlur = 18 + Math.sin(time) * 8;
+        const pulseOpacity = 0.65 + Math.sin(time) * 0.25;
+
+        cy.nodes().forEach(node => {
+          if (isCriticalNode(node) && !node.hasClass('dimmed')) {
+            node.style({
+              'shadow-blur': pulseBlur,
+              'shadow-opacity': pulseOpacity
+            });
+          }
+        });
+      }
+      animFrameRef.current = requestAnimationFrame(loop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(loop);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
+
+  // ─── Sequential Hop-by-Hop Trace Path Animation ────────────────────────────
   const traceSuspiciousPath = useCallback(() => {
     const cy = cyRef.current;
-    if (!cy || isTracing) return;
+    if (!cy || isTracingRef.current) return;
+    isTracingRef.current = true;
     setIsTracing(true);
 
-    // Reset styles
     cy.elements().removeClass('highlighted dimmed traced-edge');
 
-    const suspiciousEdges = cy.edges('.suspicious-edge');
-    if (suspiciousEdges.length === 0) {
-      cy.edges().addClass('suspicious-edge');
-    }
+    const pathEdges = cy.edges().sort((a, b) =>
+      (a.data('time') || '').localeCompare(b.data('time') || '')
+    );
 
-    const pathEdges = cy.edges().sort((a, b) => {
-      return (a.data('amount') || 0) - (b.data('amount') || 0);
-    });
-
-    let currentStep = 0;
+    let step = 0;
     const interval = setInterval(() => {
-      if (currentStep < pathEdges.length) {
-        const edge = pathEdges[currentStep];
+      if (step < pathEdges.length) {
+        const edge = pathEdges[step];
         edge.addClass('traced-edge');
         edge.source().addClass('highlighted');
         edge.target().addClass('highlighted');
-        currentStep++;
+
+        // Dim all elements not part of current active hop
+        cy.elements()
+          .not(edge)
+          .not(edge.source())
+          .not(edge.target())
+          .addClass('dimmed');
+
+        // Sync with parent scrubber
+        onHopTraceRef.current?.(step);
+        step++;
       } else {
         clearInterval(interval);
-        setTimeout(() => setIsTracing(false), 800);
+        setTimeout(() => {
+          cy.elements().removeClass('dimmed traced-edge');
+          isTracingRef.current = false;
+          setIsTracing(false);
+        }, 1400);
       }
-    }, 350);
-  }, [isTracing]);
+    }, 450);
+  }, []);
 
-  // Imperative API for Parent
+  // ─── Imperative handle for parent (GraphModule) ───────────────────────────
   useImperativeHandle(ref, () => ({
-    highlightNode: (nodeId, duration = 1500) => {
+    highlightNode: (nodeId, duration = 1600) => {
       const cy = cyRef.current;
       if (!cy) return;
       const node = cy.getElementById(nodeId);
-      if (node.length > 0) {
-        node.flashClass('highlighted', duration);
-      }
+      if (node.length > 0) node.flashClass('highlighted', duration);
     },
     highlightHop: (hopIndex) => {
       const cy = cyRef.current;
       if (!cy) return;
       cy.elements().removeClass('highlighted dimmed traced-edge');
-      const edge = cy.edges()[hopIndex];
+      const allEdges = cy.edges();
+      const edge = allEdges[hopIndex];
       if (edge && edge.length > 0) {
         edge.addClass('traced-edge');
         edge.source().addClass('highlighted');
@@ -161,13 +200,11 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
       }
     },
     traceSuspiciousPath,
-    fit: () => {
-      cyRef.current?.fit(cyRef.current.elements(), 40);
-    }
+    fit: () => { cyRef.current?.fit(cyRef.current.elements(), 40); }
   }));
 
-  // Controls Callbacks
-  const handleZoomIn = useCallback(() => {
+  // ─── Controls ─────────────────────────────────────────────────────────────
+  const handleZoomIn  = useCallback(() => {
     const cy = cyRef.current;
     if (!cy) return;
     cy.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
@@ -179,20 +216,38 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
     cy.zoom({ level: cy.zoom() * 0.8, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   }, []);
 
-  const handleFit = useCallback(() => {
-    cyRef.current?.fit(cyRef.current.elements(), 40);
+  const handleFit = useCallback(() => cyRef.current?.fit(cyRef.current.elements(), 40), []);
+
+  const runLayout = useCallback((cy, animate = false) => {
+    if (!cy || cy.elements().length === 0) return;
+
+    cy.layout({
+      name: 'dagre',
+      rankDir: 'LR',
+      nodeSep: 65,
+      rankSep: 145,
+      edgeSep: 20,
+      ranker: 'network-simplex',
+      animate,
+      animationDuration: 400,
+      animationEasing: 'ease-out',
+      padding: 45,
+      fit: true
+    }).run();
   }, []);
 
   const handleResetLayout = useCallback(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    applyHierarchicalLayout(cy, containerRef.current, true);
-    cy.fit(cy.elements(), 40);
-  }, []);
+    runLayout(cyRef.current, true);
+  }, [runLayout]);
 
-  // 1. Setup Cytoscape Instance
+  // ─── Cytoscape Mount ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || isInitializedRef.current) return;
+    if (!containerRef.current) return;
+
+    if (cyRef.current) {
+      cyRef.current.destroy();
+      cyRef.current = null;
+    }
 
     const cy = cytoscape({
       container: containerRef.current,
@@ -201,29 +256,40 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
-      minZoom: 0.3,
-      maxZoom: 3.0
+      minZoom: 0.2,
+      maxZoom: 4.0,
     });
 
     cyRef.current = cy;
-    isInitializedRef.current = true;
 
-    // Node Click -> Neighborhood focus
+    // Node click -> Neighborhood focus
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
       const neighborhood = node.neighborhood().add(node);
-
       cy.elements().removeClass('highlighted dimmed');
       cy.elements().not(neighborhood).addClass('dimmed');
       neighborhood.addClass('highlighted');
-
       onNodeClickRef.current?.({ id: node.id(), status: node.data('status'), data: node.data() });
     });
 
-    // Background Click -> Reset focus
+    // Node Hover -> Connected Edge Highlight & Graph Dim
+    cy.on('mouseover', 'node', (evt) => {
+      if (isTracingRef.current) return;
+      const node = evt.target;
+      const neighborhood = node.neighborhood().add(node);
+      cy.elements().addClass('dimmed');
+      neighborhood.removeClass('dimmed').addClass('hovered-focus');
+    });
+
+    cy.on('mouseout', 'node', () => {
+      if (isTracingRef.current) return;
+      cy.elements().removeClass('dimmed hovered-focus');
+    });
+
+    // Background click -> Reset focus
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
-        cy.elements().removeClass('highlighted dimmed traced-edge');
+        cy.elements().removeClass('highlighted dimmed traced-edge hovered-focus');
         onNodeClickRef.current?.(null);
       }
     });
@@ -231,22 +297,22 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
     return () => {
       cyRef.current?.destroy();
       cyRef.current = null;
-      isInitializedRef.current = false;
     };
   }, []);
 
-  // 2. Synchronize Elements & Position
+  // ─── Sync Elements with Staggered Hop Entrance Animation ──────────────────
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy || !isInitializedRef.current) return;
+    if (!cy) return;
+
+    const role = getRole();
 
     cy.batch(() => {
       cy.elements().remove();
-      const role = getRole();
 
-      // Add Nodes
+      // Add Nodes with type and layout metadata (initial opacity 0 for staggered entrance)
       topology.nodes.forEach(node => {
-        const id = String(node.id || node.accountId);
+        const id = String(node.id || node.accountId || '');
         const displayLabel = role === 'admin' ? id : maskAccount(id);
         cy.add({
           group: 'nodes',
@@ -254,7 +320,11 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
             id,
             displayLabel,
             status: node.status || 'active',
-            type: node.type
+            type: node.type || 'mule',
+            layer: node.layer !== undefined ? node.layer : 0
+          },
+          style: {
+            'opacity': 0
           }
         });
       });
@@ -262,83 +332,109 @@ const GraphCanvas = forwardRef(({ nodes = [], edges = [], onNodeClick, caseId = 
       // Add Edges
       topology.edges.forEach((edge, idx) => {
         const id = edge.id || `e-${idx}`;
-        const label = formatTransactionLabel(edge);
-        const edgeEl = cy.add({
+        const sourceId = String(edge.source || edge.from || '');
+        const targetId = String(edge.target || edge.to || '');
+
+        if (!cy.getElementById(sourceId).length || !cy.getElementById(targetId).length) return;
+
+        const el = cy.add({
           group: 'edges',
           data: {
             id,
-            source: String(edge.source),
-            target: String(edge.target),
+            source: sourceId,
+            target: targetId,
             amount: edge.amount,
             channel: edge.channel,
-            label
+            time: edge.time || edge.timestamp || '',
+            label: formatEdgeLabel(edge)
+          },
+          style: {
+            'opacity': 0
           }
         });
 
-        if (edge.is_suspicious || Number(edge.amount || 0) > 100000) {
-          edgeEl.addClass('suspicious-edge');
+        if (edge.is_suspicious || Number(edge.amount || 0) > 80000) {
+          el.addClass('suspicious-edge');
         }
       });
     });
 
-    applyHierarchicalLayout(cy, containerRef.current, false);
-    cy.fit(cy.elements(), 40);
-  }, [topology]);
+    runLayout(cy, false);
+
+    // Staggered forensic reveal animation by hop distance
+    const maxHop = Math.max(...topology.nodes.map(n => n.layer || 0), 3);
+    for (let hop = 0; hop <= maxHop; hop++) {
+      setTimeout(() => {
+        if (!cyRef.current) return;
+        const hopNodes = cyRef.current.nodes().filter(n => (n.data('layer') || 0) === hop);
+        const hopEdges = cyRef.current.edges().filter(e => {
+          const srcLayer = e.source().data('layer') || 0;
+          return srcLayer === hop - 1 || (hop === 0 && srcLayer === 0);
+        });
+
+        hopNodes.animate({
+          style: { 'opacity': 1 },
+          duration: 220,
+          easing: 'ease-out'
+        });
+        hopEdges.animate({
+          style: { 'opacity': 0.85 },
+          duration: 200,
+          easing: 'ease-out'
+        });
+      }, hop * 90);
+    }
+  }, [topology, runLayout]);
 
   return (
-    <div className="relative w-full h-full bg-[#080D18] overflow-hidden select-none">
-      {/* Cytoscape DOM Mount */}
+    <div
+      className="relative w-full h-full overflow-hidden select-none"
+      style={{
+        backgroundColor: '#080D18',
+        backgroundImage: `radial-gradient(circle at 50% 50%, ${ambientGlowColor} 0%, transparent 70%), radial-gradient(circle at 1px 1px, rgba(59, 130, 246, 0.12) 1px, transparent 0)`,
+        backgroundSize: '100% 100%, 24px 24px'
+      }}
+    >
+      {/* Cytoscape mount DOM element */}
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Floating Investigation Tooling HUD */}
-      <div className="absolute top-4 left-4 flex items-center gap-1.5 p-1 bg-[#0C1220]/90 backdrop-blur-md border border-[#1A2640] rounded-sm shadow-2xl z-20">
-        <button
-          onClick={handleZoomIn}
-          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
-          title="Zoom In"
-        >
+      {/* Floating Investigation HUD */}
+      <div className="absolute top-3 left-3 flex items-center gap-1 p-1 bg-[#0C1220]/95 backdrop-blur-md border border-[#1E2D4A] rounded-sm shadow-[0_4px_20px_rgba(0,0,0,0.4)] z-20">
+        <button onClick={handleZoomIn}  className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Zoom In">
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
-        <button
-          onClick={handleZoomOut}
-          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
-          title="Zoom Out"
-        >
+        <button onClick={handleZoomOut} className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Zoom Out">
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <div className="w-px h-3.5 bg-[#1A2640]" />
-        <button
-          onClick={handleFit}
-          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
-          title="Fit View"
-        >
+        <button onClick={handleFit}         className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Fit View">
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
-        <button
-          onClick={handleResetLayout}
-          className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors"
-          title="Reset DAG Hierarchy"
-        >
+        <button onClick={handleResetLayout} className="p-1.5 rounded-sm hover:bg-[#131E2E] text-slate-400 hover:text-slate-200 transition-colors" title="Reset Layout">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
         <div className="w-px h-3.5 bg-[#1A2640]" />
-        {/* Trace Flow Action Button */}
         <button
           onClick={traceSuspiciousPath}
           disabled={isTracing}
-          className="flex items-center gap-1 px-2 py-1 rounded-sm bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-400 text-[9px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+          className="flex items-center gap-1 px-3 py-1 rounded-sm bg-blue-600/25 hover:bg-blue-600/35 border border-blue-500/50 text-blue-300 text-[9px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(59,130,246,0.35)] animate-pulse"
         >
           <Play className="w-2.5 h-2.5 fill-current" />
           <span>{isTracing ? 'Tracing...' : 'Trace Path'}</span>
         </button>
       </div>
 
-      {/* Network Topology Label Badge */}
-      <div className="absolute top-4 right-4 px-2.5 py-1 bg-[#0C1220]/90 backdrop-blur-md border border-[#1A2640] rounded-sm text-[9px] font-mono text-slate-400 shadow-xl z-20">
-        <span className="text-slate-500 font-bold uppercase">Topology:</span> Multi-Hop Mule Cascade ({topology.nodes.length} Nodes · {topology.edges.length} Flows)
+      {/* Dynamic Topology Label Badge (Top-Right) */}
+      <div className="absolute top-3 right-3 px-3 py-1.5 bg-[#0C1220]/95 backdrop-blur-md border border-[#1E2D4A] rounded-sm text-[9.5px] font-mono text-slate-300 shadow-[0_4px_20px_rgba(0,0,0,0.4)] z-20 select-none">
+        <span className="text-blue-400 font-bold uppercase tracking-wider">Topology:</span>{' '}
+        <span className="text-slate-200 font-semibold">{topology.label}</span>
       </div>
+
+      {/* Interactive Minimap */}
+      <Minimap nodes={topology.nodes} edges={topology.edges} cyRef={cyRef} />
     </div>
   );
 });
 
+GraphCanvas.displayName = 'GraphCanvas';
 export default GraphCanvas;
